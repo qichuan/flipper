@@ -9,7 +9,7 @@
   "license": "MIT",
   "bugs": "https://github.com/facebook/flipper/issues",
   "dependencies": {
-    "fs-extra": "^8.1.0",
+    "fs-extra": "^9.0.1",
     "flipper-babel-transformer": "0.47.0",
     "metro": "^0.59.0",
     "metro-minify-terser": "^0.59.0"

@@ -180,7 +180,7 @@
     "flipper-pkg-lib": "0.47.0",
     "flipper-plugin-lib": "0.47.0",
     "flow-bin": "0.124.0",
-    "fs-extra": "^9.0.0",
+    "fs-extra": "^9.0.1",
     "glob": "^7.1.2",
     "ignore": "^5.1.4",
     "invariant": "^2.2.4",

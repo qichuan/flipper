@@ -23,35 +23,44 @@ import {
   DetailSidebar,
   styled,
   SearchableTable,
-  FlipperPlugin,
   Sheet,
   TableHighlightedRows,
   TableRows,
   TableBodyRow,
   produce,
 } from 'flipper';
-import {Request, RequestId, Response, Route} from './types';
+import {
+  Request,
+  RequestId,
+  Response,
+  Route,
+  ResponseFollowupChunk,
+  Header,
+  MockRoute,
+} from './types';
 import {convertRequestToCurlCommand, getHeaderValue, decodeBody} from './utils';
 import RequestDetails from './RequestDetails';
 import {clipboard} from 'electron';
 import {URL} from 'url';
-import {DefaultKeyboardAction} from 'app/src/MenuBar';
 import {MockResponseDialog} from './MockResponseDialog';
+import {combineBase64Chunks} from './chunks';
+import {PluginClient, createState, usePlugin, useValue} from 'flipper-plugin';
 
 const LOCALSTORAGE_MOCK_ROUTE_LIST_KEY = '__NETWORK_CACHED_MOCK_ROUTE_LIST';
 
-type PersistedState = {
-  requests: {[id: string]: Request};
-  responses: {[id: string]: Response};
+export const BodyOptions = {
+  formatted: 'formatted',
+  parsed: 'parsed',
 };
 
-type State = {
-  selectedIds: Array<RequestId>;
-  searchTerm: string;
-  routes: {[id: string]: Route};
-  nextRouteId: number;
-  isMockResponseSupported: boolean;
-  showMockResponseDialog: boolean;
+type Events = {
+  newRequest: Request;
+  newResponse: Response;
+  partialResponse: Response | ResponseFollowupChunk;
+};
+
+type Methods = {
+  mockResponses(params: {routes: MockRoute[]}): Promise<void>;
 };
 
 const COLUMN_SIZE = {
@@ -113,211 +122,307 @@ export interface NetworkRouteManager {
   addRoute(): void;
   modifyRoute(id: string, routeChange: Partial<Route>): void;
   removeRoute(id: string): void;
+  copyHighlightedCalls(
+    highlightedRows: Set<string>,
+    requests: {[id: string]: Request},
+    responses: {[id: string]: Response},
+  ): void;
 }
 const nullNetworkRouteManager: NetworkRouteManager = {
   addRoute() {},
   modifyRoute(_id: string, _routeChange: Partial<Route>) {},
   removeRoute(_id: string) {},
+  copyHighlightedCalls(
+    _highlightedRows: Set<string>,
+    _requests: {[id: string]: Request},
+    _responses: {[id: string]: Response},
+  ) {},
 };
 export const NetworkRouteContext = createContext<NetworkRouteManager>(
   nullNetworkRouteManager,
 );
 
-export default class extends FlipperPlugin<State, any, PersistedState> {
-  static keyboardActions: Array<DefaultKeyboardAction> = ['clear'];
-  static subscribed = [];
-  static defaultPersistedState = {
-    requests: {},
-    responses: {},
-  };
-  networkRouteManager: NetworkRouteManager = nullNetworkRouteManager;
+export function plugin(client: PluginClient<Events, Methods>) {
+  const networkRouteManager = createState<NetworkRouteManager>(
+    nullNetworkRouteManager,
+  );
 
-  static metricsReducer(persistedState: PersistedState) {
-    const failures = Object.values(persistedState.responses).reduce(function (
-      previous,
-      values,
-    ) {
-      return previous + (values.status >= 400 ? 1 : 0);
-    },
-    0);
-    return Promise.resolve({NUMBER_NETWORK_FAILURES: failures});
-  }
+  const selectedIds = createState<Array<RequestId>>([]);
+  const searchTerm = createState<string>('');
+  const routes = createState<{[id: string]: Route}>({});
+  const nextRouteId = createState<number>(0);
+  const isMockResponseSupported = createState<boolean>(false);
+  const showMockResponseDialog = createState<boolean>(false);
+  const detailBodyFormat = createState<string>(BodyOptions.parsed);
+  const highlightedRows = createState<Set<string> | null | undefined>(
+    new Set(),
+  );
+  const isDeeplinked = createState<boolean>(false);
+  const requests = createState<{[id: string]: Request}>(
+    {},
+    {persist: 'requests'},
+  );
+  const responses = createState<{[id: string]: Response}>(
+    {},
+    {persist: 'responses'},
+  );
 
-  static persistedStateReducer(
-    persistedState: PersistedState,
-    method: string,
-    data: Request | Response,
-  ) {
-    switch (method) {
-      case 'newRequest':
-        return Object.assign({}, persistedState, {
-          requests: {...persistedState.requests, [data.id]: data as Request},
-        });
-      case 'newResponse':
-        return Object.assign({}, persistedState, {
-          responses: {...persistedState.responses, [data.id]: data as Response},
-        });
-      default:
-        return persistedState;
-    }
-  }
-
-  static serializePersistedState = (persistedState: PersistedState) => {
-    return Promise.resolve(JSON.stringify(persistedState));
-  };
-
-  static deserializePersistedState = (serializedString: string) => {
-    return JSON.parse(serializedString);
-  };
-
-  static getActiveNotifications(persistedState: PersistedState) {
-    const responses = persistedState
-      ? persistedState.responses || new Map()
-      : new Map();
-    const r: Array<Response> = Object.values(responses);
-    return (
-      r
-        // Show error messages for all status codes indicating a client or server error
-        .filter((response: Response) => response.status >= 400)
-        .map((response: Response) => {
-          const request = persistedState.requests[response.id];
-          const url: string = (request && request.url) || '(URL missing)';
-          return {
-            id: response.id,
-            title: `HTTP ${response.status}: Network request failed`,
-            message: `Request to ${url} failed. ${response.reason}`,
-            severity: 'error' as 'error',
-            timestamp: response.timestamp,
-            category: `HTTP${response.status}`,
-            action: response.id,
-          };
-        })
-    );
-  }
-
-  constructor(props: any) {
-    super(props);
-    this.state = {
-      selectedIds: [],
-      searchTerm: '',
-      routes: {},
-      nextRouteId: 0,
-      isMockResponseSupported: false,
-      showMockResponseDialog: false,
+  const partialResponses = createState<{
+    [id: string]: {
+      initialResponse?: Response;
+      followupChunks: {[id: number]: string};
     };
-  }
+  }>({}, {persist: 'partialResponses'});
 
-  init() {
-    this.client.supportsMethod('mockResponses').then((result) => {
-      const routes = JSON.parse(
-        localStorage.getItem(LOCALSTORAGE_MOCK_ROUTE_LIST_KEY) || '{}',
-      );
-      this.setState({
-        routes: routes,
-        isMockResponseSupported: result,
-        showMockResponseDialog: false,
-        nextRouteId: routes.length,
+  client.onDeepLink((payload: unknown) => {
+    if (typeof payload === 'string') {
+      parseDeepLinkPayload(payload);
+      isDeeplinked.set(true);
+    }
+  });
+
+  client.addMenuEntry({
+    action: 'clear',
+    handler: clearLogs,
+  });
+
+  client.onConnect(() => {
+    init();
+  });
+
+  client.onDeactivate(() => {
+    isDeeplinked.set(false);
+  });
+
+  client.onMessage('newRequest', (data) => {
+    requests.update((draft) => {
+      draft[data.id] = data;
+    });
+  });
+
+  client.onMessage('newResponse', (data) => {
+    responses.update((draft) => {
+      draft[data.id] = data;
+    });
+  });
+
+  client.onMessage('partialResponse', (data) => {
+    /* Some clients (such as low end Android devices) struggle to serialise large payloads in one go, so partial responses allow them
+        to split payloads into chunks and serialise each individually.
+
+        Such responses will be distinguished between normal responses by both:
+          * Being sent to the partialResponse method.
+          * Having a totalChunks value > 1.
+
+        The first chunk will always be included in the initial response. This response must have index 0.
+        The remaining chunks will be sent in ResponseFollowupChunks, which each contain another piece of the payload, along with their index from 1 onwards.
+        The payload of each chunk is individually encoded in the same way that full responses are.
+
+        The order that initialResponse, and followup chunks are recieved is not guaranteed to be in index order.
+    */
+    const message: Response | ResponseFollowupChunk = data as
+      | Response
+      | ResponseFollowupChunk;
+    if (message.index !== undefined && message.index > 0) {
+      // It's a follow up chunk
+      const followupChunk: ResponseFollowupChunk = message as ResponseFollowupChunk;
+      const partialResponseEntry = partialResponses.get()[followupChunk.id] ?? {
+        followupChunks: {},
+      };
+
+      const newPartialResponseEntry = produce(partialResponseEntry, (draft) => {
+        draft.followupChunks[followupChunk.index] = followupChunk.data;
       });
+      const newPartialResponse = {
+        ...partialResponses.get(),
+        [followupChunk.id]: newPartialResponseEntry,
+      };
+
+      assembleChunksIfResponseIsComplete(newPartialResponse, followupChunk.id);
+      return;
+    }
+    // It's an initial chunk
+    const partialResponse: Response = message as Response;
+    const partialResponseEntry = partialResponses.get()[partialResponse.id] ?? {
+      followupChunks: {},
+    };
+    const newPartialResponseEntry = {
+      ...partialResponseEntry,
+      initialResponse: partialResponse,
+    };
+    const newPartialResponse = {
+      ...partialResponses.get(),
+      [partialResponse.id]: newPartialResponseEntry,
+    };
+    assembleChunksIfResponseIsComplete(newPartialResponse, partialResponse.id);
+  });
+
+  function assembleChunksIfResponseIsComplete(
+    partialResp: {
+      [id: string]: {
+        initialResponse?: Response;
+        followupChunks: {[id: number]: string};
+      };
+    },
+    responseId: string,
+  ) {
+    const partialResponseEntry = partialResp[responseId];
+    const numChunks = partialResponseEntry.initialResponse?.totalChunks;
+    if (
+      !partialResponseEntry.initialResponse ||
+      !numChunks ||
+      Object.keys(partialResponseEntry.followupChunks).length + 1 < numChunks
+    ) {
+      // Partial response not yet complete, do nothing.
+      partialResponses.set(partialResp);
+      return;
+    }
+    // Partial response has all required chunks, convert it to a full Response.
+
+    const response: Response = partialResponseEntry.initialResponse;
+    const allChunks: string[] =
+      response.data != null
+        ? [
+            response.data,
+            ...Object.entries(partialResponseEntry.followupChunks)
+              // It's important to parseInt here or it sorts lexicographically
+              .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10))
+              .map(([_k, v]: [string, string]) => v),
+          ]
+        : [];
+    const data = combineBase64Chunks(allChunks);
+
+    const newResponse = {
+      ...response,
+      // Currently data is always decoded at render time, so re-encode it to match the single response format.
+      data: btoa(data),
+    };
+
+    responses.update((draft) => {
+      draft[newResponse.id] = newResponse;
     });
 
-    this.setState(this.parseDeepLinkPayload(this.props.deepLinkPayload));
-
-    // declare new variable to be called inside the interface
-    const setState = this.setState.bind(this);
-    const informClientMockChange = this.informClientMockChange.bind(this);
-    this.networkRouteManager = {
-      addRoute() {
-        setState(
-          produce((draftState: State) => {
-            const nextRouteId = draftState.nextRouteId;
-            draftState.routes[nextRouteId.toString()] = {
-              requestUrl: '',
-              requestMethod: 'GET',
-              responseData: '',
-              responseHeaders: {},
-            };
-            draftState.nextRouteId = nextRouteId + 1;
-          }),
-        );
-      },
-      modifyRoute(id: string, routeChange: Partial<Route>) {
-        setState(
-          produce((draftState: State) => {
-            if (!draftState.routes.hasOwnProperty(id)) {
-              return;
-            }
-            draftState.routes[id] = {...draftState.routes[id], ...routeChange};
-            informClientMockChange(draftState.routes);
-          }),
-        );
-      },
-      removeRoute(id: string) {
-        setState(
-          produce((draftState: State) => {
-            if (draftState.routes.hasOwnProperty(id)) {
-              delete draftState.routes[id];
-            }
-            informClientMockChange(draftState.routes);
-          }),
-        );
-      },
-    };
+    partialResponses.update((draft) => {
+      delete draft[newResponse.id];
+    });
   }
 
-  teardown() {}
+  function init() {
+    client.supportsMethod('mockResponses').then((result) => {
+      const newRoutes = JSON.parse(
+        localStorage.getItem(LOCALSTORAGE_MOCK_ROUTE_LIST_KEY) || '{}',
+      );
+      routes.set(newRoutes);
+      isMockResponseSupported.set(result);
+      showMockResponseDialog.set(false);
+      nextRouteId.set(Object.keys(routes).length);
 
-  onKeyboardAction = (action: string) => {
-    if (action === 'clear') {
-      this.clearLogs();
-    }
-  };
+      informClientMockChange(routes.get());
+    });
 
-  parseDeepLinkPayload = (
-    deepLinkPayload: string | null,
-  ): Pick<State, 'selectedIds' | 'searchTerm'> => {
+    // declare new variable to be called inside the interface
+    networkRouteManager.set({
+      addRoute() {
+        const newNextRouteId = nextRouteId.get();
+        routes.update((draft) => {
+          draft[newNextRouteId.toString()] = {
+            requestUrl: '',
+            requestMethod: 'GET',
+            responseData: '',
+            responseHeaders: {},
+            responseStatus: '200',
+          };
+        });
+        nextRouteId.set(newNextRouteId + 1);
+      },
+      modifyRoute(id: string, routeChange: Partial<Route>) {
+        if (!routes.get().hasOwnProperty(id)) {
+          return;
+        }
+        routes.update((draft) => {
+          Object.assign(draft[id], routeChange);
+        });
+        informClientMockChange(routes.get());
+      },
+      removeRoute(id: string) {
+        if (routes.get().hasOwnProperty(id)) {
+          routes.update((draft) => {
+            delete draft[id];
+          });
+        }
+        informClientMockChange(routes.get());
+      },
+      copyHighlightedCalls(
+        highlightedRows: Set<string> | null | undefined,
+        requests: {[id: string]: Request},
+        responses: {[id: string]: Response},
+      ) {
+        // iterate through highlighted rows
+        highlightedRows?.forEach((row) => {
+          const response = responses[row];
+          // convert headers
+          const headers: {[id: string]: Header} = {};
+          response.headers.forEach((e) => {
+            headers[e.key] = e;
+          });
+
+          // convert data TODO: we only want this for non-binary data! See D23403095
+          const responseData =
+            response && response.data ? decodeBody(response) : null;
+
+          const newNextRouteId = nextRouteId.get();
+          routes.update((draft) => {
+            draft[newNextRouteId.toString()] = {
+              requestUrl: requests[row].url,
+              requestMethod: requests[row].method,
+              responseData: responseData as string,
+              responseHeaders: headers,
+              responseStatus: responses[row].status.toString(),
+            };
+          });
+          nextRouteId.set(newNextRouteId + 1);
+        });
+
+        informClientMockChange(routes.get());
+      },
+    });
+  }
+
+  function parseDeepLinkPayload(deepLinkPayload: unknown) {
     const searchTermDelim = 'searchTerm=';
-    if (deepLinkPayload === null) {
-      return {
-        selectedIds: [],
-        searchTerm: '',
-      };
+    if (typeof deepLinkPayload !== 'string') {
+      selectedIds.set([]);
+      searchTerm.set('');
     } else if (deepLinkPayload.startsWith(searchTermDelim)) {
-      return {
-        selectedIds: [],
-        searchTerm: deepLinkPayload.slice(searchTermDelim.length),
-      };
+      selectedIds.set([]);
+      searchTerm.set(deepLinkPayload.slice(searchTermDelim.length));
+    } else {
+      selectedIds.set([deepLinkPayload]);
+      searchTerm.set('');
     }
-    return {
-      selectedIds: [deepLinkPayload],
-      searchTerm: '',
-    };
-  };
+  }
 
-  onRowHighlighted = (selectedIds: Array<RequestId>) =>
-    this.setState({selectedIds});
+  function clearLogs() {
+    selectedIds.set([]);
+    responses.set({});
+    requests.set({});
+  }
 
-  copyRequestCurlCommand = () => {
-    const {requests} = this.props.persistedState;
-    const {selectedIds} = this.state;
+  function copyRequestCurlCommand() {
     // Ensure there is only one row highlighted.
-    if (selectedIds.length !== 1) {
+    if (selectedIds.get().length !== 1) {
       return;
     }
 
-    const request = requests[selectedIds[0]];
+    const request = requests.get()[selectedIds.get()[0]];
     if (!request) {
       return;
     }
     const command = convertRequestToCurlCommand(request);
     clipboard.writeText(command);
-  };
+  }
 
-  clearLogs = () => {
-    this.setState({selectedIds: []});
-    this.props.setPersistedState({responses: {}, requests: {}});
-  };
-
-  informClientMockChange = (routes: {[id: string]: Route}) => {
+  async function informClientMockChange(routes: {[id: string]: Route}) {
     const existedIdSet: {[id: string]: {[method: string]: boolean}} = {};
     const filteredRoutes: {[id: string]: Route} = Object.entries(routes).reduce(
       (accRoutes, [id, route]) => {
@@ -342,84 +447,94 @@ export default class extends FlipperPlugin<State, any, PersistedState> {
       {},
     );
 
-    if (this.state.isMockResponseSupported) {
+    if (isMockResponseSupported.get()) {
       const routesValuesArray = Object.values(filteredRoutes);
       localStorage.setItem(
         LOCALSTORAGE_MOCK_ROUTE_LIST_KEY,
         JSON.stringify(routesValuesArray),
       );
-      this.client.call('mockResponses', {
-        routes: routesValuesArray.map((route: Route) => ({
-          requestUrl: route.requestUrl,
-          method: route.requestMethod,
-          data: route.responseData,
-          headers: [...Object.values(route.responseHeaders)],
-        })),
-      });
+
+      try {
+        await client.send('mockResponses', {
+          routes: routesValuesArray.map((route: Route) => ({
+            requestUrl: route.requestUrl,
+            method: route.requestMethod,
+            data: route.responseData,
+            headers: [...Object.values(route.responseHeaders)],
+            status: route.responseStatus,
+          })),
+        });
+      } catch (e) {
+        console.error('Failed to mock responses.', e);
+      }
     }
-  };
-
-  onMockButtonPressed = () => {
-    this.setState({showMockResponseDialog: true});
-  };
-
-  onCloseButtonPressed = () => {
-    this.setState({showMockResponseDialog: false});
-  };
-
-  renderSidebar = () => {
-    const {requests, responses} = this.props.persistedState;
-    const {selectedIds} = this.state;
-    const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
-
-    if (!selectedId) {
-      return null;
-    }
-    const requestWithId = requests[selectedId];
-    if (!requestWithId) {
-      return null;
-    }
-    return (
-      <RequestDetails
-        key={selectedId}
-        request={requestWithId}
-        response={responses[selectedId]}
-      />
-    );
-  };
-
-  render() {
-    const {requests, responses} = this.props.persistedState;
-    const {
-      selectedIds,
-      searchTerm,
-      routes,
-      isMockResponseSupported,
-      showMockResponseDialog,
-    } = this.state;
-
-    return (
-      <FlexColumn grow={true}>
-        <NetworkRouteContext.Provider value={this.networkRouteManager}>
-          <NetworkTable
-            requests={requests || {}}
-            responses={responses || {}}
-            routes={routes}
-            onMockButtonPressed={this.onMockButtonPressed}
-            onCloseButtonPressed={this.onCloseButtonPressed}
-            showMockResponseDialog={showMockResponseDialog}
-            clear={this.clearLogs}
-            copyRequestCurlCommand={this.copyRequestCurlCommand}
-            onRowHighlighted={this.onRowHighlighted}
-            highlightedRows={selectedIds ? new Set(selectedIds) : null}
-            searchTerm={searchTerm}
-            isMockResponseSupported={isMockResponseSupported}
-          />
-          <DetailSidebar width={500}>{this.renderSidebar()}</DetailSidebar>
-        </NetworkRouteContext.Provider>
-      </FlexColumn>
-    );
   }
+
+  return {
+    selectedIds,
+    searchTerm,
+    routes,
+    nextRouteId,
+    isMockResponseSupported,
+    showMockResponseDialog,
+    detailBodyFormat,
+    highlightedRows,
+    isDeeplinked,
+    requests,
+    responses,
+    partialResponses,
+    networkRouteManager,
+    clearLogs,
+    onRowHighlighted(selectedIdsArr: Array<RequestId>) {
+      selectedIds.set(selectedIdsArr);
+    },
+    onMockButtonPressed() {
+      showMockResponseDialog.set(true);
+    },
+    onCloseButtonPressed() {
+      showMockResponseDialog.set(false);
+    },
+    onSelectFormat(bodyFormat: string) {
+      detailBodyFormat.set(bodyFormat);
+    },
+    copyRequestCurlCommand,
+    init,
+  };
+}
+
+export function Component() {
+  const instance = usePlugin(plugin);
+
+  const requests = useValue(instance.requests);
+  const responses = useValue(instance.responses);
+  const selectedIds = useValue(instance.selectedIds);
+  const searchTerm = useValue(instance.searchTerm);
+  const routes = useValue(instance.routes);
+  const isMockResponseSupported = useValue(instance.isMockResponseSupported);
+  const showMockResponseDialog = useValue(instance.showMockResponseDialog);
+  const networkRouteManager = useValue(instance.networkRouteManager);
+
+  return (
+    <FlexColumn grow={true}>
+      <NetworkRouteContext.Provider value={networkRouteManager}>
+        <NetworkTable
+          requests={requests || {}}
+          responses={responses || {}}
+          routes={routes}
+          onMockButtonPressed={instance.onMockButtonPressed}
+          onCloseButtonPressed={instance.onCloseButtonPressed}
+          showMockResponseDialog={showMockResponseDialog}
+          clear={instance.clearLogs}
+          copyRequestCurlCommand={instance.copyRequestCurlCommand}
+          onRowHighlighted={instance.onRowHighlighted}
+          highlightedRows={selectedIds ? new Set(selectedIds) : null}
+          searchTerm={searchTerm}
+          isMockResponseSupported={isMockResponseSupported}
+        />
+        <Sidebar />
+      </NetworkRouteContext.Provider>
+    </FlexColumn>
+  );
 }
 
 type NetworkTableProps = {
@@ -440,6 +555,9 @@ type NetworkTableProps = {
 type NetworkTableState = {
   sortedRows: TableRows;
   routes: {[id: string]: Route};
+  highlightedRows: Set<string> | null | undefined;
+  requests: {[id: string]: Request};
+  responses: {[id: string]: Response};
 };
 
 function formatTimestamp(timestamp: number): string {
@@ -466,44 +584,54 @@ function buildRow(
   if (request.url == null) {
     return null;
   }
-  const url = new URL(request.url);
-  const domain = url.host + url.pathname;
+  let url: URL | undefined = undefined;
+  try {
+    url = new URL(request.url);
+  } catch (e) {
+    console.warn(`Failed to parse url: '${request.url}'`, e);
+  }
+  const domain = url ? url.host + url.pathname : '<unknown>';
   const friendlyName = getHeaderValue(request.headers, 'X-FB-Friendly-Name');
   const style = response && response.isMock ? mockingStyle : undefined;
 
-  let copyText = `# HTTP request for ${domain} (ID: ${request.id})
-## Request
-HTTP ${request.method} ${request.url}
-${request.headers
-  .map(
-    ({key, value}: {key: string; value: string}): string =>
-      `${key}: ${String(value)}`,
-  )
-  .join('\n')}`;
+  const copyText = () => {
+    let copyText = `# HTTP request for ${domain} (ID: ${request.id})
+  ## Request
+  HTTP ${request.method} ${request.url}
+  ${request.headers
+    .map(
+      ({key, value}: {key: string; value: string}): string =>
+        `${key}: ${String(value)}`,
+    )
+    .join('\n')}`;
 
-  const requestData = request.data ? decodeBody(request) : null;
-  const responseData = response && response.data ? decodeBody(response) : null;
+    // TODO: we want decoding only for non-binary data! See D23403095
+    const requestData = request.data ? decodeBody(request) : null;
+    const responseData =
+      response && response.data ? decodeBody(response) : null;
 
-  if (requestData) {
-    copyText += `\n\n${requestData}`;
-  }
+    if (requestData) {
+      copyText += `\n\n${requestData}`;
+    }
 
-  if (response) {
-    copyText += `
+    if (response) {
+      copyText += `
 
-## Response
-HTTP ${response.status} ${response.reason}
-${response.headers
-  .map(
-    ({key, value}: {key: string; value: string}): string =>
-      `${key}: ${String(value)}`,
-  )
-  .join('\n')}`;
-  }
+  ## Response
+  HTTP ${response.status} ${response.reason}
+  ${response.headers
+    .map(
+      ({key, value}: {key: string; value: string}): string =>
+        `${key}: ${String(value)}`,
+    )
+    .join('\n')}`;
+    }
 
-  if (responseData) {
-    copyText += `\n\n${responseData}`;
-  }
+    if (responseData) {
+      copyText += `\n\n${responseData}`;
+    }
+    return copyText;
+  };
 
   return {
     columns: {
@@ -546,10 +674,9 @@ ${response.headers
     filterValue: `${request.method} ${request.url}`,
     sortKey: request.timestamp,
     copyText,
+    getSearchContent: copyText,
     highlightOnHover: true,
     style: style,
-    requestBody: requestData,
-    responseBody: responseData,
   };
 }
 
@@ -575,20 +702,25 @@ function calculateState(
         }
       }
     }
-  } else if (props.responses !== nextProps.responses) {
+  }
+  if (props.responses !== nextProps.responses) {
     // new or updated response
-    const resId = Object.keys(nextProps.responses).find(
+    const resIds = Object.keys(nextProps.responses).filter(
       (responseId: RequestId) =>
         props.responses[responseId] !== nextProps.responses[responseId],
     );
-    if (resId) {
-      const request = nextProps.requests[resId];
-      // sanity check; to pass null check
-      if (request) {
-        const newRow = buildRow(request, nextProps.responses[resId]);
-        const index = rows.findIndex((r: TableBodyRow) => r.key === request.id);
-        if (index > -1 && newRow) {
-          rows[index] = newRow;
+    for (const resId of resIds) {
+      if (resId) {
+        const request = nextProps.requests[resId];
+        // sanity check; to pass null check
+        if (request) {
+          const newRow = buildRow(request, nextProps.responses[resId]);
+          const index = rows.findIndex(
+            (r: TableBodyRow) => r.key === request.id,
+          );
+          if (index > -1 && newRow) {
+            rows[index] = newRow;
+          }
         }
       }
     }
@@ -602,7 +734,39 @@ function calculateState(
   return {
     sortedRows: rows,
     routes: nextProps.routes,
+    highlightedRows: nextProps.highlightedRows,
+    requests: props.requests,
+    responses: props.responses,
   };
+}
+
+function Sidebar() {
+  const instance = usePlugin(plugin);
+  const requests = useValue(instance.requests);
+  const responses = useValue(instance.responses);
+  const selectedIds = useValue(instance.selectedIds);
+  const detailBodyFormat = useValue(instance.detailBodyFormat);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+
+  if (!selectedId) {
+    return null;
+  }
+  const requestWithId = requests[selectedId];
+  if (!requestWithId) {
+    return null;
+  }
+
+  return (
+    <DetailSidebar width={500}>
+      <RequestDetails
+        key={selectedId}
+        request={requestWithId}
+        response={responses[selectedId]}
+        bodyFormat={detailBodyFormat}
+        onSelectFormat={instance.onSelectFormat}
+      />
+    </DetailSidebar>
+  );
 }
 
 class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
@@ -672,7 +836,7 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
             highlightedRows={this.props.highlightedRows}
             rowLineHeight={26}
             allowRegexSearch={true}
-            allowBodySearch={true}
+            allowContentSearch={true}
             zebra={false}
             clearSearchTerm={this.props.searchTerm !== ''}
             defaultSearchTerm={this.props.searchTerm}
@@ -695,6 +859,9 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
                   onHide();
                   this.props.onCloseButtonPressed();
                 }}
+                highlightedRows={this.state.highlightedRows}
+                requests={this.state.requests}
+                responses={this.state.responses}
               />
             )}
           </Sheet>

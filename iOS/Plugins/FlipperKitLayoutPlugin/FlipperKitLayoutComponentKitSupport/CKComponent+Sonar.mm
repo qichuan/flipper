@@ -38,11 +38,6 @@
     sonar_additionalDataOverride;
 @end
 
-static BOOL AccessibilityContextIsDefault(
-    CKComponentAccessibilityContext accessibilityContext) {
-  return accessibilityContext == CKComponentAccessibilityContext();
-}
-
 static NSDictionary<NSString*, NSObject*>* AccessibilityContextDict(
     CKComponentAccessibilityContext accessibilityContext) {
   NSMutableDictionary<NSString*, NSObject*>* accessibilityDict =
@@ -66,11 +61,6 @@ static NSDictionary<NSString*, NSObject*>* AccessibilityContextDict(
   if (accessibilityContext.accessibilityTraits != nil) {
     accessibilityDict[@"accessibilityTraits"] =
         SKObject(@([accessibilityContext.accessibilityTraits integerValue]));
-  }
-  if (accessibilityContext.accessibilityComponentAction) {
-    accessibilityDict[@"accessibilityComponentAction.identifier"] = SKObject(
-        @(accessibilityContext.accessibilityComponentAction.identifier()
-              .c_str()));
   }
   return accessibilityDict;
 }
@@ -234,16 +224,16 @@ static CK::StaticMutex _mutex = CK_MUTEX_INITIALIZER;
   // Only add accessibility panel if accessibilityContext is not default
   CKComponentAccessibilityContext accessibilityContext =
       [self viewConfiguration].accessibilityContext();
-  if (!AccessibilityContextIsDefault(accessibilityContext)) {
-    [data addObject:[SKNamed
-                        newWithName:@"Accessibility"
-                          withValue:@{
-                            @"accessibilityContext" :
-                                AccessibilityContextDict(accessibilityContext),
-                            @"accessibilityEnabled" : SKMutableObject(
-                                @(CK::Component::Accessibility::
-                                      IsAccessibilityEnabled())),
-                          }]];
+  NSDictionary* accessibilityDict =
+      AccessibilityContextDict(accessibilityContext);
+  if ([accessibilityDict count]) {
+    [data addObject:[SKNamed newWithName:@"Accessibility"
+                               withValue:@{
+                                 @"accessibilityContext" : accessibilityDict,
+                                 @"accessibilityEnabled" : SKMutableObject(
+                                     @(CK::Component::Accessibility::
+                                           IsAccessibilityEnabled())),
+                               }]];
   }
   if ([self respondsToSelector:@selector(sonar_additionalDataOverride)]) {
     [data addObjectsFromArray:[(id)self sonar_additionalDataOverride]];

@@ -11,6 +11,7 @@ import com.facebook.flipper.core.FlipperDynamic;
 import com.facebook.flipper.core.FlipperObject;
 import com.facebook.flipper.plugins.inspector.Named;
 import com.facebook.flipper.plugins.inspector.NodeDescriptor;
+import com.facebook.flipper.plugins.inspector.SetDataOperations;
 import com.facebook.flipper.plugins.inspector.Touch;
 import java.util.Collections;
 import java.util.List;
@@ -47,7 +48,11 @@ public class ObjectDescriptor extends NodeDescriptor<Object> {
   }
 
   @Override
-  public void setValue(Object node, String[] path, FlipperDynamic value) {}
+  public void setValue(
+      Object node,
+      String[] path,
+      @Nullable SetDataOperations.FlipperValueHint kind,
+      FlipperDynamic value) {}
 
   @Override
   public List<Named<String>> getAttributes(Object node) {
@@ -70,7 +75,8 @@ public class ObjectDescriptor extends NodeDescriptor<Object> {
   @Override
   public boolean matches(String query, Object node) throws Exception {
     final NodeDescriptor descriptor = descriptorForClass(node.getClass());
-    final List<Named<String>> attributes = descriptor.getAttributes(node);
+    final List<Named<String>> attributes =
+        descriptor == null ? Collections.emptyList() : descriptor.getAttributes(node);
     for (Named<String> namedString : attributes) {
       if (namedString.getName().equals("id")) {
         if (namedString.getValue().toLowerCase().contains(query)) {
@@ -79,6 +85,6 @@ public class ObjectDescriptor extends NodeDescriptor<Object> {
       }
     }
 
-    return descriptor.getName(node).toLowerCase().contains(query);
+    return descriptor == null ? false : descriptor.getName(node).toLowerCase().contains(query);
   }
 }

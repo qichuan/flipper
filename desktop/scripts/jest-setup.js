@@ -7,6 +7,10 @@
  * @format
  */
 
+// import/no-unresolved complains, although it is a perfectly fine import
+// eslint-disable-next-line
 global.fetch = require('jest-fetch-mock');
 
 require('immer').enableMapSet();
+
+require('../app/src/fb-stubs/Logger').init(undefined, {isTest: true});

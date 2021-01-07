@@ -2,10 +2,10 @@
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-crash-reporter",
   "id": "CrashReporter",
-  "version": "0.47.0",
+  "version": "0.0.0",
   "description": "A plugin which will display a crash",
   "main": "dist/bundle.js",
-  "flipperBundlerEntry": "index.js",
+  "flipperBundlerEntry": "index.tsx",
   "repository": "https://github.com/facebook/flipper",
   "license": "MIT",
   "keywords": [
@@ -18,8 +18,5 @@
   },
   "dependencies": {
     "unicode-substring": "^1.0.0"
-  },
-  "scripts": {
-    "prepack": "../../pkg/bin/run bundle"
   }
 }

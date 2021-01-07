@@ -8,10 +8,11 @@
  */
 
 import {default as reducer, registerInstalledPlugins} from '../pluginManager';
+import {InstalledPluginDetails} from 'flipper-plugin-lib';
 
 test('reduce empty registerInstalledPlugins', () => {
-  const result = reducer(undefined, registerInstalledPlugins(new Map()));
-  expect(result).toEqual({installedPlugins: new Map()});
+  const result = reducer(undefined, registerInstalledPlugins([]));
+  expect(result.installedPlugins).toEqual(new Map());
 });
 
 const EXAMPLE_PLUGIN = {
@@ -21,22 +22,19 @@ const EXAMPLE_PLUGIN = {
   dir: '/plugins/test',
   specVersion: 2,
   source: 'src/index.ts',
-  isDefault: false,
+  isBundled: false,
+  isActivatable: true,
   main: 'lib/index.js',
   title: 'test',
   id: 'test',
   entry: '/plugins/test/lib/index.js',
-};
+} as InstalledPluginDetails;
 
 test('reduce registerInstalledPlugins, clear again', () => {
-  const result = reducer(
-    undefined,
-    registerInstalledPlugins(new Map([['test', EXAMPLE_PLUGIN]])),
+  const result = reducer(undefined, registerInstalledPlugins([EXAMPLE_PLUGIN]));
+  expect(result.installedPlugins).toEqual(
+    new Map([[EXAMPLE_PLUGIN.name, EXAMPLE_PLUGIN]]),
   );
-  expect(result).toEqual({
-    installedPlugins: new Map([['test', EXAMPLE_PLUGIN]]),
-  });
-
-  const result2 = reducer(result, registerInstalledPlugins(new Map()));
-  expect(result2).toEqual({installedPlugins: new Map()});
+  const result2 = reducer(result, registerInstalledPlugins([]));
+  expect(result2.installedPlugins).toEqual(new Map());
 });

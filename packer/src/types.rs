@@ -9,7 +9,7 @@ use clap::arg_enum;
 use std::fmt::{self, Display};
 
 arg_enum! {
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize)]
     #[serde(rename_all = "lowercase")]
     pub enum Platform {
         Mac,
@@ -37,10 +37,12 @@ pub enum PackType {
 
 impl Display for PackType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use PackType::*;
         match *self {
-            Frameworks => write!(f, "frameworks"),
-            Core => write!(f, "core"),
+            Self::Frameworks => write!(f, "frameworks"),
+            Self::Core => write!(f, "core"),
         }
     }
 }
+
+#[derive(Eq, PartialEq, Debug, serde::Serialize)]
+pub struct HashSum(pub String);

@@ -23,6 +23,7 @@ import com.facebook.flipper.plugins.inspector.HiddenNode;
 import com.facebook.flipper.plugins.inspector.InspectorValue;
 import com.facebook.flipper.plugins.inspector.Named;
 import com.facebook.flipper.plugins.inspector.NodeDescriptor;
+import com.facebook.flipper.plugins.inspector.SetDataOperations;
 import com.facebook.flipper.plugins.inspector.Touch;
 import com.facebook.flipper.plugins.inspector.descriptors.utils.stethocopies.FragmentCompatUtil;
 import java.util.ArrayList;
@@ -74,7 +75,9 @@ public class ViewGroupDescriptor extends NodeDescriptor<ViewGroup> {
               if (connected()) {
                 if (key.set(node)) {
                   NodeDescriptor descriptor = descriptorForClass(node.getClass());
-                  descriptor.invalidate(node);
+                  if (descriptor != null) {
+                    descriptor.invalidate(node);
+                  }
                   invalidateAX(node);
                 }
 
@@ -194,7 +197,12 @@ public class ViewGroupDescriptor extends NodeDescriptor<ViewGroup> {
   }
 
   @Override
-  public void setValue(ViewGroup node, String[] path, FlipperDynamic value) throws Exception {
+  public void setValue(
+      ViewGroup node,
+      String[] path,
+      @Nullable SetDataOperations.FlipperValueHint kind,
+      FlipperDynamic value)
+      throws Exception {
     switch (path[0]) {
       case "ViewGroup":
         switch (path[1]) {
@@ -221,7 +229,7 @@ public class ViewGroupDescriptor extends NodeDescriptor<ViewGroup> {
         break;
       default:
         final NodeDescriptor descriptor = descriptorForClass(View.class);
-        descriptor.setValue(node, path, value);
+        descriptor.setValue(node, path, kind, value);
         break;
     }
     invalidate(node);
@@ -292,12 +300,31 @@ public class ViewGroupDescriptor extends NodeDescriptor<ViewGroup> {
   }
 
   private static boolean shouldSkip(View view) {
-    Object tag = view.getTag(R.id.flipper_skip_view_traversal);
-    if (!(tag instanceof Boolean)) {
-      return false;
+    if (hasTag(view, R.id.flipper_skip_view_traversal)) {
+      return true;
     }
 
-    return (Boolean) tag;
+    if (view instanceof ViewGroup
+        && hasTag(view, R.id.flipper_skip_empty_view_group_traversal)
+        && !hasVisibleChildren((ViewGroup) view)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private static boolean hasTag(View view, int id) {
+    Object tag = view.getTag(id);
+    return tag instanceof Boolean && (Boolean) tag;
+  }
+
+  private static boolean hasVisibleChildren(ViewGroup viewGroup) {
+    for (int i = 0; i < viewGroup.getChildCount(); i++) {
+      if (viewGroup.getChildAt(i).getVisibility() == View.VISIBLE) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

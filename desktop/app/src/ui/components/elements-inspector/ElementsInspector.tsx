@@ -9,7 +9,7 @@
 
 import {Component} from 'react';
 import {Elements, DecorateRow} from './elements';
-import {ContextMenuExtension} from 'flipper';
+import {ContextMenuExtension} from '../../../ui';
 import React from 'react';
 
 export type ElementID = string;
@@ -32,6 +32,11 @@ export type ElementData = {
   };
 };
 
+export enum ElementFramework {
+  'LITHO',
+  'CK',
+}
+
 export type ElementAttribute = {
   name: string;
   value: string;
@@ -41,6 +46,9 @@ export type ElementExtraInfo = {
   linkedNode?: string; // id of linked node in opposite tree
   expandWithParent?: boolean;
   linkedTree?: string;
+  metaData?: {
+    [key: string]: any;
+  };
 };
 
 export type Element = {
@@ -61,7 +69,6 @@ export type ElementsInspectorProps = {
     | ((key: ElementID | undefined | null) => any)
     | undefined
     | null;
-  onValueChanged: ((path: Array<string>, val: any) => any) | undefined | null;
   selected: ElementID | undefined | null;
   focused?: ElementID | undefined | null;
   searchResults?: ElementSearchResultSet | undefined | null;

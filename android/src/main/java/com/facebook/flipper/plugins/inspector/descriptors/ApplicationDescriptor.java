@@ -18,6 +18,7 @@ import com.facebook.flipper.core.FlipperObject;
 import com.facebook.flipper.plugins.inspector.ApplicationWrapper;
 import com.facebook.flipper.plugins.inspector.Named;
 import com.facebook.flipper.plugins.inspector.NodeDescriptor;
+import com.facebook.flipper.plugins.inspector.SetDataOperations;
 import com.facebook.flipper.plugins.inspector.Touch;
 import com.facebook.flipper.plugins.inspector.descriptors.utils.ContextDescriptorUtils;
 import java.util.ArrayList;
@@ -210,7 +211,11 @@ public class ApplicationDescriptor extends NodeDescriptor<ApplicationWrapper> {
   }
 
   @Override
-  public void setValue(ApplicationWrapper node, String[] path, FlipperDynamic value) {}
+  public void setValue(
+      ApplicationWrapper node,
+      String[] path,
+      @Nullable SetDataOperations.FlipperValueHint kind,
+      FlipperDynamic value) {}
 
   @Override
   public List<Named<String>> getAttributes(ApplicationWrapper node) {
@@ -230,7 +235,9 @@ public class ApplicationDescriptor extends NodeDescriptor<ApplicationWrapper> {
     if (childCount > 0) {
       final Object topChild = getChildAt(node, childCount - 1);
       final NodeDescriptor descriptor = descriptorForClass(topChild.getClass());
-      descriptor.setHighlighted(topChild, selected, isAlignmentMode);
+      if (descriptor != null) {
+        descriptor.setHighlighted(topChild, selected, isAlignmentMode);
+      }
     }
   }
 

@@ -20,7 +20,9 @@ import {clipboard, MenuItemConstructorOptions} from 'electron';
 import React, {MouseEvent, KeyboardEvent} from 'react';
 import {Scrollable} from '../..';
 
-export const ROW_HEIGHT = 23;
+export const ElementsConstants = {
+  rowHeight: 23,
+};
 
 const backgroundColor = (props: {
   selected: boolean;
@@ -58,7 +60,7 @@ const ElementsRowContainer = styled(ContextMenu)<any>((props) => ({
   color: props.selected || props.focused ? colors.white : colors.grapeDark3,
   flexShrink: 0,
   flexWrap: 'nowrap',
-  height: ROW_HEIGHT,
+  height: ElementsConstants.rowHeight,
   paddingLeft: (props.level - 1) * 12,
   paddingRight: 20,
   position: 'relative',
@@ -86,10 +88,10 @@ ElementsRowDecoration.displayName = 'Elements:ElementsRowDecoration';
 
 const ElementsLine = styled.div<{childrenCount: number}>((props) => ({
   backgroundColor: colors.light20,
-  height: props.childrenCount * ROW_HEIGHT - 4,
+  height: props.childrenCount * ElementsConstants.rowHeight - 4,
   position: 'absolute',
   right: 3,
-  top: ROW_HEIGHT - 3,
+  top: ElementsConstants.rowHeight - 3,
   zIndex: 2,
   width: 2,
   borderRadius: '999em',
@@ -107,7 +109,6 @@ const NoShrinkText = styled(Text)({
   flexShrink: 0,
   flexWrap: 'nowrap',
   overflow: 'hidden',
-  userSelect: 'none',
   fontWeight: 400,
 });
 NoShrinkText.displayName = 'Elements:NoShrinkText';
@@ -220,6 +221,7 @@ type ElementsRowProps = {
     | ((key: ElementID | undefined | null) => void)
     | undefined
     | null;
+  onCopyExpandedTree: (key: Element, maxDepth: number) => string;
   style?: Object;
   contextMenuExtensions: Array<ContextMenuExtension>;
   decorateRow?: DecorateRow;
@@ -248,12 +250,13 @@ class ElementsRow extends PureComponent<ElementsRowProps, ElementsRowState> {
       {
         label: 'Copy',
         click: () => {
-          const attrs = props.element.attributes.reduce(
-            (acc, val) => acc + ` ${val.name}=${val.value}`,
-            '',
-          );
-          clipboard.writeText(`${props.element.name}${attrs}`);
+          clipboard.writeText(props.onCopyExpandedTree(props.element, 0));
         },
+      },
+      {
+        label: 'Copy expanded child elements',
+        click: () =>
+          clipboard.writeText(props.onCopyExpandedTree(props.element, 255)),
       },
       {
         label: props.element.expanded ? 'Collapse' : 'Expand',
@@ -450,6 +453,7 @@ type ElementsState = {
   flatKeys: Array<ElementID>;
   flatElements: FlatElements;
   maxDepth: number;
+  scrolledElement: string | null | undefined;
 };
 
 export type ContextMenuExtension = {
@@ -468,6 +472,7 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
       flatElements: [],
       flatKeys: [],
       maxDepth: 0,
+      scrolledElement: null,
     };
   }
 
@@ -634,6 +639,7 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
       searchResults,
       contextMenuExtensions,
       decorateRow,
+      elements,
     } = this.props;
     const {flatElements} = this.state;
 
@@ -651,6 +657,30 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
     if (this.props.alternateRowColor) {
       isEven = index % 2 === 0;
     }
+    const onCopyExpandedTree = (
+      maxDepth: number,
+      element: Element,
+      depth: number,
+    ): string => {
+      const shouldIncludeChildren = element.expanded && depth < maxDepth;
+      const children = shouldIncludeChildren
+        ? element.children.map((childId) => {
+            const childElement = elements[childId];
+            return childElement == null
+              ? ''
+              : onCopyExpandedTree(maxDepth, childElement, depth + 1);
+          })
+        : [];
+
+      const childrenValue = children.toString().replace(',', '');
+      const indentation = depth === 0 ? '' : '\n'.padEnd(depth * 2 + 1, ' ');
+      const attrs = element.attributes.reduce(
+        (acc, val) => acc + ` ${val.name}=${val.value}`,
+        '',
+      );
+
+      return `${indentation}${element.name}${attrs}${childrenValue}`;
+    };
 
     return (
       <ElementsRow
@@ -663,6 +693,9 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
           onElementHovered && onElementHovered(key);
         }}
         onElementSelected={onElementSelected}
+        onCopyExpandedTree={(element, maxDepth) =>
+          onCopyExpandedTree(maxDepth, element, 0)
+        }
         selected={selected === row.key}
         focused={focused === row.key}
         matchingSearchQuery={
@@ -676,22 +709,22 @@ export class Elements extends PureComponent<ElementsProps, ElementsState> {
         contextMenuExtensions={contextMenuExtensions || []}
         decorateRow={decorateRow}
         forwardedRef={
-          selected == row.key
+          selected == row.key && this.state.scrolledElement !== selected
             ? (selectedRow) => {
                 if (!selectedRow || !this._outerRef.current) {
                   return;
                 }
+                this.setState({scrolledElement: selected});
                 const outer = this._outerRef.current;
                 if (outer.scrollTo) {
-                  outer.scrollTo(
-                    0,
-                    this._calculateScrollTop(
+                  outer.scrollTo({
+                    top: this._calculateScrollTop(
                       outer.offsetHeight,
                       outer.scrollTop,
                       selectedRow.offsetHeight,
                       selectedRow.offsetTop,
                     ),
-                  );
+                  });
                 }
               }
             : null

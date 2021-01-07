@@ -1,8 +1,8 @@
 {
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-navigation",
-  "id": "flipper-plugin-navigation",
-  "version": "0.47.0",
+  "id": "Navigation",
+  "version": "0.0.0",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",
@@ -14,7 +14,8 @@
   "bugs": {
     "email": "beneloca@fb.com"
   },
-  "scripts": {
-    "prepack": "../../pkg/bin/run bundle"
+  "peerDependencies": {
+    "flipper-plugin": "0.0.0",
+    "antd": "*"
   }
 }

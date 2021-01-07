@@ -20,7 +20,6 @@ import {
   FlexColumn,
   LoadingIndicator,
   styled,
-  Select,
   ToggleButton,
   Text,
 } from 'flipper';
@@ -87,19 +86,14 @@ type ImagesCacheOverviewProps = {
   events: Array<ImageEventWithId>;
   onTrackLeaks: (enabled: boolean) => void;
   isLeakTrackingEnabled: boolean;
+  onShowDiskImages: (enabled: boolean) => void;
+  showDiskImages: boolean;
 };
 
 type ImagesCacheOverviewState = {
   selectedImage: ImageId | null;
   size: number;
 };
-
-const _StyledSelect = styled(Select)({
-  marginLeft: 6,
-  marginRight: 6,
-  height: '100%',
-  maxWidth: 164,
-});
 
 export default class ImagesCacheOverview extends PureComponent<
   ImagesCacheOverviewProps,
@@ -230,6 +224,11 @@ export default class ImagesCacheOverview extends PureComponent<
             toggled={this.props.isLeakTrackingEnabled}
             onClick={this.props.onTrackLeaks}
             label="Track Leaks"
+          />
+          <Toggle
+            toggled={this.props.showDiskImages}
+            onClick={this.props.onShowDiskImages}
+            label="Show Disk Images"
           />
           <Spacer />
           <input

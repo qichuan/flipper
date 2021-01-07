@@ -17,9 +17,8 @@ export async function listDevices(store: Store): Promise<Array<BaseDevice>> {
   const androidDevices = state.settingsState.enableAndroid
     ? await getActiveAndroidDevices(store)
     : [];
-  const iOSDevices: BaseDevice[] = state.application
-    .xcodeCommandLineToolsDetected
-    ? await getActiveDevicesAndSimulators()
+  const iOSDevices: BaseDevice[] = state.settingsState.enableIOS
+    ? await getActiveDevicesAndSimulators(store)
     : [];
   return [...androidDevices, ...iOSDevices];
 }

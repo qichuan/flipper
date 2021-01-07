@@ -43,6 +43,9 @@ export type Settings = {
       openDevMenu: string;
     };
   };
+  disableSandy: boolean;
+  darkMode: boolean;
+  showWelcomeAtStartup: boolean;
 };
 
 export type Action =
@@ -75,6 +78,9 @@ const initialState: Settings = {
       openDevMenu: 'Alt+Shift+D',
     },
   },
+  disableSandy: false,
+  darkMode: false,
+  showWelcomeAtStartup: true,
 };
 
 export default function reducer(

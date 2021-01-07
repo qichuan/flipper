@@ -5,10 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @format
- * @flow
  */
 
-import {DeviceLogEntry} from '../devices/BaseDevice';
+import {DeviceLogEntry} from 'flipper-plugin';
 
 export function shouldParseAndroidLog(
   entry: DeviceLogEntry,

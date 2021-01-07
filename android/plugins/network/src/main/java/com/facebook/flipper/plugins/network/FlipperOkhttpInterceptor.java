@@ -40,8 +40,8 @@ import okio.BufferedSource;
 public class FlipperOkhttpInterceptor
     implements Interceptor, BufferingFlipperPlugin.MockResponseConnectionListener {
 
-  // By default, limit body size (request or response) reporting to 100KB to avoid OOM
-  private static final long DEFAULT_MAX_BODY_BYTES = 100 * 1024;
+  // By default, limit body size (request or response) reporting to 1MB to avoid OOM
+  private static final long DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
   private final long mMaxBodyBytes;
 
@@ -228,10 +228,12 @@ public class FlipperOkhttpInterceptor
     if (TextUtils.isEmpty(requestUrl) || TextUtils.isEmpty(method)) {
       return null;
     }
+    final int statusCode = route.getInt("status");
 
     final ResponseInfo mockResponse = new ResponseInfo();
     mockResponse.body = data.getBytes();
     mockResponse.statusCode = HttpURLConnection.HTTP_OK;
+    mockResponse.statusCode = statusCode;
     mockResponse.statusReason = "OK";
     if (headersArray != null) {
       final List<NetworkReporter.Header> headers = new ArrayList<>();

@@ -15,7 +15,7 @@ import type {State as PluginsState} from '../../reducers/plugins.tsx';
 import type {State as PluginStatesState} from '../../reducers/pluginStates.tsx';
 import type {PluginDetails} from 'flipper-plugin-lib';
 import type {State as PluginMessageQueueState} from '../../reducers/pluginStates.tsx';
-import {FlipperBasePlugin} from 'flipper';
+import {FlipperBasePlugin} from '../../plugin';
 import type {ReduxState} from '../../reducers/index.tsx';
 
 function createMockFlipperPluginWithDefaultPersistedState(id: string) {
@@ -95,6 +95,7 @@ function mockPluginState(
 function mockPluginDefinition(name: string): PluginDetails {
   return {
     name,
+    id: name,
     out: 'out',
   };
 }

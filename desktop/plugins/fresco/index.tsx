@@ -19,7 +19,7 @@ import {
 } from './api';
 import {Fragment} from 'react';
 import {ImagesMap} from './ImagePool';
-import {MetricType, ReduxState} from 'flipper';
+import {ReduxState} from 'flipper';
 import React from 'react';
 import ImagesCacheOverview from './ImagesCacheOverview';
 import {
@@ -45,6 +45,7 @@ export type PersistedState = {
   imagesMap: ImagesMap;
   closeableReferenceLeaks: Array<AndroidCloseableReferenceLeakEvent>;
   isLeakTrackingEnabled: boolean;
+  showDiskImages: boolean;
   nextEventId: number;
 };
 
@@ -78,12 +79,6 @@ const debugLog = (...args: any[]) => {
   }
 };
 
-type ImagesMetaData = {
-  levels: ImagesListResponse;
-  events: Array<ImageEventWithId>;
-  imageDataList: Array<ImageData>;
-};
-
 export default class FlipperImagesPlugin extends FlipperPlugin<
   PluginState,
   BaseAction,
@@ -96,6 +91,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     surfaceList: new Set(),
     closeableReferenceLeaks: [],
     isLeakTrackingEnabled: false,
+    showDiskImages: false,
     nextEventId: 0,
   };
 
@@ -112,7 +108,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
       return defaultPromise;
     }
     return Promise.all([
-      callClient('listImages'),
+      callClient('listImages', {showDiskImages: persistedState.showDiskImages}),
       callClient('getAllImageEventsInfo'),
     ]).then(async ([responseImages, responseEvents]) => {
       const levels: ImagesList = responseImages.levels;
@@ -136,7 +132,10 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
         ) {
           const surface = attribution[0] ? attribution[0].trim() : undefined;
           if (surface && surface.length > 0) {
-            pluginData.surfaceList.add(surface);
+            pluginData.surfaceList = new Set([
+              ...pluginData.surfaceList,
+              surface,
+            ]);
           }
         }
         pluginData = {
@@ -186,16 +185,17 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     } else if (method == 'events') {
       const event: ImageEvent = data as ImageEvent;
       debugLog('Received events', event);
-      const {surfaceList} = persistedState;
+      let {surfaceList} = persistedState;
       const {attribution} = event;
       if (attribution instanceof Array && attribution.length > 0) {
         const surface = attribution[0] ? attribution[0].trim() : undefined;
         if (surface && surface.length > 0) {
-          surfaceList.add(surface);
+          surfaceList = new Set([...surfaceList, surface]);
         }
       }
       return {
         ...persistedState,
+        surfaceList,
         events: [
           {eventId: persistedState.nextEventId, ...event},
           ...persistedState.events,
@@ -205,37 +205,6 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     }
 
     return persistedState;
-  };
-
-  static metricsReducer = (
-    persistedState: PersistedState,
-  ): Promise<MetricType> => {
-    const {events, imagesMap, closeableReferenceLeaks} = persistedState;
-
-    const wastedBytes = (events || []).reduce((acc, event) => {
-      const {viewport, imageIds} = event;
-      if (!viewport) {
-        return acc;
-      }
-      return imageIds.reduce((innerAcc, imageID) => {
-        const imageData: ImageData = imagesMap[imageID];
-        if (!imageData) {
-          return innerAcc;
-        }
-        const imageWidth: number = imageData.width;
-        const imageHeight: number = imageData.height;
-        const viewPortWidth: number = viewport.width;
-        const viewPortHeight: number = viewport.height;
-        const viewPortArea = viewPortWidth * viewPortHeight;
-        const imageArea = imageWidth * imageHeight;
-        return innerAcc + Math.max(0, imageArea - viewPortArea);
-      }, acc);
-    }, 0);
-
-    return Promise.resolve({
-      WASTED_BYTES: wastedBytes,
-      CLOSEABLE_REFERENCE_LEAKS: (closeableReferenceLeaks || []).length,
-    });
   };
 
   static getActiveNotifications = ({
@@ -360,17 +329,23 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
   };
   updateCaches = (reason: string) => {
     debugLog('Requesting images list (reason=' + reason + ')');
-    this.client.call('listImages').then((response: ImagesListResponse) => {
-      response.levels.forEach((data) =>
-        this.imagePool ? this.imagePool.fetchImages(data.imageIds) : undefined,
-      );
-      this.props.setPersistedState({images: response.levels});
-      this.updateImagesOnUI(
-        this.props.persistedState.images,
-        this.state.selectedSurfaces,
-        this.state.coldStartFilter,
-      );
-    });
+    this.client
+      .call('listImages', {
+        showDiskImages: this.props.persistedState.showDiskImages,
+      })
+      .then((response: ImagesListResponse) => {
+        response.levels.forEach((data) =>
+          this.imagePool
+            ? this.imagePool.fetchImages(data.imageIds)
+            : undefined,
+        );
+        this.props.setPersistedState({images: response.levels});
+        this.updateImagesOnUI(
+          this.props.persistedState.images,
+          this.state.selectedSurfaces,
+          this.state.coldStartFilter,
+        );
+      });
   };
 
   onClear = (type: string) => {
@@ -455,6 +430,16 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     });
   };
 
+  onShowDiskImages = (checked: boolean) => {
+    this.props.logger.track('usage', 'fresco:onShowDiskImages', {
+      enabled: checked,
+    });
+    this.props.setPersistedState({
+      showDiskImages: checked,
+    });
+    this.updateCaches('refresh');
+  };
+
   render() {
     const options = [...this.props.persistedState.surfaceList].reduce(
       (acc, item) => {
@@ -492,6 +477,8 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
             this.props.persistedState.isLeakTrackingEnabled
           }
           onTrackLeaks={this.onTrackLeaks}
+          showDiskImages={this.props.persistedState.showDiskImages}
+          onShowDiskImages={this.onShowDiskImages}
         />
         <DetailSidebar>{this.renderSidebar()}</DetailSidebar>
       </React.Fragment>

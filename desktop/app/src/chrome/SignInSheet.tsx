@@ -17,7 +17,7 @@ import {
   Input,
   Link,
   colors,
-} from 'flipper';
+} from '../ui';
 import React, {Component} from 'react';
 import {writeKeychain, getUser} from '../fb-stubs/user';
 import {login} from '../reducers/user';
@@ -25,6 +25,9 @@ import {connect} from 'react-redux';
 import {State as Store} from '../reducers';
 import ContextMenu from '../ui/components/ContextMenu';
 import {clipboard} from 'electron';
+import {reportPlatformFailures} from '../utils/metrics';
+import {Modal} from 'antd';
+import {TrackingScope} from 'flipper-plugin';
 
 const Container = styled(FlexColumn)({
   padding: 20,
@@ -46,6 +49,7 @@ const TokenInput = styled(Input)({
 });
 
 type OwnProps = {
+  useSandy?: boolean;
   onHide: () => any;
 };
 
@@ -69,16 +73,20 @@ class SignInSheet extends Component<Props, State> {
     error: null,
   };
 
+  login = async (token: string) => {
+    await writeKeychain(token);
+    const user = await getUser();
+    if (user) {
+      this.props.login(user);
+    } else {
+      throw new Error('Failed to login using the provided token');
+    }
+  };
+
   saveToken = async (token: string) => {
     this.setState({token, loading: true});
     try {
-      await writeKeychain(token);
-      const user = await getUser();
-      if (user) {
-        this.props.login(user);
-      } else {
-        throw new Error('Failed to login using the provided token');
-      }
+      await reportPlatformFailures(this.login(token), 'auth:login');
       this.setState({loading: false});
       this.props.onHide();
     } catch (error) {
@@ -123,13 +131,48 @@ class SignInSheet extends Component<Props, State> {
     this.setState({token: '', error: ''});
   };
 
-  render() {
+  renderSandyContainer(
+    contents: React.ReactElement,
+    footer: React.ReactElement,
+  ) {
+    return (
+      <TrackingScope scope="logindialog">
+        <Modal
+          visible
+          centered
+          onCancel={this.props.onHide}
+          width={570}
+          title="Login"
+          footer={footer}>
+          <FlexColumn>{contents}</FlexColumn>
+        </Modal>
+      </TrackingScope>
+    );
+  }
+
+  renderNativeContainer(
+    contents: React.ReactElement,
+    footer: React.ReactElement,
+  ) {
     return (
       <Container>
+        {contents}
+        <br />
+        <FlexRow>
+          <Spacer />
+          {footer}
+        </FlexRow>
+      </Container>
+    );
+  }
+
+  render() {
+    const content = (
+      <>
         <Title>You are not currently logged in to Facebook.</Title>
         <InfoText>
           To log in you will need to{' '}
-          <Link href="https://our.internmc.facebook.com/intern/oauth/nuclide/">
+          <Link href="https://www.internalfb.com/intern/oauth/nuclide/">
             open this page
           </Link>
           , copy the Nuclide access token you find on that page to clipboard,
@@ -145,27 +188,33 @@ class SignInSheet extends Component<Props, State> {
             onChange={(e) => this.setState({token: e.target.value})}
           />
         </ContextMenu>
-        <br />
         {this.state.error && (
-          <InfoText color={colors.red}>
-            <strong>Error:</strong>&nbsp;{this.state.error}
-          </InfoText>
+          <>
+            <br />
+            <InfoText color={colors.red}>
+              <strong>Error:</strong>&nbsp;{this.state.error}
+            </InfoText>
+          </>
         )}
-        <br />
-        <FlexRow>
-          <Spacer />
-          <Button compact padded onClick={this.props.onHide}>
-            Cancel
-          </Button>
-          <Button compact padded onClick={this.reset}>
-            Reset
-          </Button>
-          <Button type="primary" compact padded onClick={this.signIn}>
-            Sign In
-          </Button>
-        </FlexRow>
-      </Container>
+      </>
     );
+    const footer = (
+      <>
+        <Button compact padded onClick={this.props.onHide}>
+          Cancel
+        </Button>
+        <Button compact padded onClick={this.reset}>
+          Reset
+        </Button>
+        <Button type="primary" compact padded onClick={this.signIn}>
+          Sign In
+        </Button>
+      </>
+    );
+
+    return this.props.useSandy
+      ? this.renderSandyContainer(content, footer)
+      : this.renderNativeContainer(content, footer);
   }
 }
 

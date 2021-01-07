@@ -7,53 +7,74 @@
  * @format
  */
 
-import {FlipperPlugin, FlipperDevicePlugin} from '../plugin';
-import {PluginDetails} from 'flipper-plugin-lib';
+import {DevicePluginMap, ClientPluginMap, PluginDefinition} from '../plugin';
+import {
+  DownloadablePluginDetails,
+  ActivatablePluginDetails,
+  BundledPluginDetails,
+} from 'flipper-plugin-lib';
 import {Actions} from '.';
 import produce from 'immer';
+import {isDevicePluginDefinition} from '../utils/pluginUtils';
 
 export type State = {
-  devicePlugins: Map<string, typeof FlipperDevicePlugin>;
-  clientPlugins: Map<string, typeof FlipperPlugin>;
-  gatekeepedPlugins: Array<PluginDetails>;
-  disabledPlugins: Array<PluginDetails>;
-  failedPlugins: Array<[PluginDetails, string]>;
+  devicePlugins: DevicePluginMap;
+  clientPlugins: ClientPluginMap;
+  loadedPlugins: Map<string, ActivatablePluginDetails>;
+  bundledPlugins: Map<string, BundledPluginDetails>;
+  gatekeepedPlugins: Array<ActivatablePluginDetails>;
+  disabledPlugins: Array<ActivatablePluginDetails>;
+  failedPlugins: Array<[ActivatablePluginDetails, string]>;
   selectedPlugins: Array<string>;
+  marketplacePlugins: Array<DownloadablePluginDetails>;
 };
-
-type PluginClass = typeof FlipperPlugin | typeof FlipperDevicePlugin;
 
 export type RegisterPluginAction = {
   type: 'REGISTER_PLUGINS';
-  payload: Array<PluginClass>;
+  payload: PluginDefinition[];
 };
 
 export type Action =
   | RegisterPluginAction
   | {
       type: 'GATEKEEPED_PLUGINS';
-      payload: Array<PluginDetails>;
+      payload: Array<ActivatablePluginDetails>;
     }
   | {
       type: 'DISABLED_PLUGINS';
-      payload: Array<PluginDetails>;
+      payload: Array<ActivatablePluginDetails>;
     }
   | {
       type: 'FAILED_PLUGINS';
-      payload: Array<[PluginDetails, string]>;
+      payload: Array<[ActivatablePluginDetails, string]>;
     }
   | {
       type: 'SELECTED_PLUGINS';
       payload: Array<string>;
+    }
+  | {
+      type: 'MARKETPLACE_PLUGINS';
+      payload: Array<DownloadablePluginDetails>;
+    }
+  | {
+      type: 'REGISTER_LOADED_PLUGINS';
+      payload: Array<ActivatablePluginDetails>;
+    }
+  | {
+      type: 'REGISTER_BUNDLED_PLUGINS';
+      payload: Array<BundledPluginDetails>;
     };
 
 const INITIAL_STATE: State = {
   devicePlugins: new Map(),
   clientPlugins: new Map(),
+  loadedPlugins: new Map(),
+  bundledPlugins: new Map(),
   gatekeepedPlugins: [],
   disabledPlugins: [],
   failedPlugins: [],
   selectedPlugins: [],
+  marketplacePlugins: [],
 };
 
 export default function reducer(
@@ -63,16 +84,14 @@ export default function reducer(
   if (action.type === 'REGISTER_PLUGINS') {
     return produce(state, (draft) => {
       const {devicePlugins, clientPlugins} = draft;
-      action.payload.forEach((p: PluginClass) => {
+      action.payload.forEach((p) => {
         if (devicePlugins.has(p.id) || clientPlugins.has(p.id)) {
           return;
         }
 
-        if (p.prototype instanceof FlipperDevicePlugin) {
-          // @ts-ignore doesn't know p must be typeof FlipperDevicePlugin here
+        if (isDevicePluginDefinition(p)) {
           devicePlugins.set(p.id, p);
-        } else if (p.prototype instanceof FlipperPlugin) {
-          // @ts-ignore doesn't know p must be typeof FlipperPlugin here
+        } else {
           clientPlugins.set(p.id, p);
         }
       });
@@ -97,6 +116,21 @@ export default function reducer(
       ...state,
       selectedPlugins: action.payload,
     };
+  } else if (action.type === 'MARKETPLACE_PLUGINS') {
+    return {
+      ...state,
+      marketplacePlugins: action.payload,
+    };
+  } else if (action.type === 'REGISTER_LOADED_PLUGINS') {
+    return {
+      ...state,
+      loadedPlugins: new Map(action.payload.map((p) => [p.id, p])),
+    };
+  } else if (action.type === 'REGISTER_BUNDLED_PLUGINS') {
+    return {
+      ...state,
+      bundledPlugins: new Map(action.payload.map((p) => [p.id, p])),
+    };
   } else {
     return state;
   }
@@ -107,26 +141,49 @@ export const selectedPlugins = (payload: Array<string>): Action => ({
   payload,
 });
 
-export const registerPlugins = (payload: Array<PluginClass>): Action => ({
+export const registerPlugins = (payload: PluginDefinition[]): Action => ({
   type: 'REGISTER_PLUGINS',
   payload,
 });
 
 export const addGatekeepedPlugins = (
-  payload: Array<PluginDetails>,
+  payload: Array<ActivatablePluginDetails>,
 ): Action => ({
   type: 'GATEKEEPED_PLUGINS',
   payload,
 });
 
-export const addDisabledPlugins = (payload: Array<PluginDetails>): Action => ({
+export const addDisabledPlugins = (
+  payload: Array<ActivatablePluginDetails>,
+): Action => ({
   type: 'DISABLED_PLUGINS',
   payload,
 });
 
 export const addFailedPlugins = (
-  payload: Array<[PluginDetails, string]>,
+  payload: Array<[ActivatablePluginDetails, string]>,
 ): Action => ({
   type: 'FAILED_PLUGINS',
+  payload,
+});
+
+export const registerMarketplacePlugins = (
+  payload: Array<DownloadablePluginDetails>,
+): Action => ({
+  type: 'MARKETPLACE_PLUGINS',
+  payload,
+});
+
+export const registerLoadedPlugins = (
+  payload: Array<ActivatablePluginDetails>,
+): Action => ({
+  type: 'REGISTER_LOADED_PLUGINS',
+  payload,
+});
+
+export const registerBundledPlugins = (
+  payload: Array<BundledPluginDetails>,
+): Action => ({
+  type: 'REGISTER_BUNDLED_PLUGINS',
   payload,
 });

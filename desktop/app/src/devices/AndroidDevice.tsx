@@ -7,11 +7,15 @@
  * @format
  */
 
-import BaseDevice, {DeviceType, LogLevel} from './BaseDevice';
+import BaseDevice from './BaseDevice';
 import adb, {Client as ADBClient} from 'adbkit';
 import {Priority} from 'adbkit-logcat';
 import ArchivedDevice from './ArchivedDevice';
 import {createWriteStream} from 'fs';
+import type {LogLevel, DeviceType} from 'flipper-plugin';
+import which from 'which';
+import {spawn} from 'child_process';
+import {dirname} from 'path';
 
 const DEVICE_RECORDING_DIR = '/sdcard/flipper_recorder';
 
@@ -21,10 +25,14 @@ export default class AndroidDevice extends BaseDevice {
     deviceType: DeviceType,
     title: string,
     adb: ADBClient,
+    abiList: Array<string>,
+    sdkVersion: string,
   ) {
     super(serial, deviceType, title, 'Android');
     this.adb = adb;
     this.icon = 'icons/android.svg';
+    this.abiList = abiList;
+    this.sdkVersion = sdkVersion;
     this.adb.openLogcat(this.serial).then((reader) => {
       reader.on('entry', (entry) => {
         let type: LogLevel = 'unknown';
@@ -60,12 +68,10 @@ export default class AndroidDevice extends BaseDevice {
   }
 
   adb: ADBClient;
+  abiList: Array<string> = [];
+  sdkVersion: string | undefined = undefined;
   pidAppMapping: {[key: number]: string} = {};
   private recordingProcess?: Promise<string>;
-
-  supportedColumns(): Array<string> {
-    return ['date', 'pid', 'tid', 'tag', 'message', 'type', 'time'];
-  }
 
   reverse(ports: [number, number]): Promise<void> {
     return Promise.all(
@@ -133,16 +139,23 @@ export default class AndroidDevice extends BaseDevice {
     }
   }
 
-  private async isValidFile(filePath: string): Promise<boolean> {
-    const fileSize = await this.adb
-      .shell(this.serial, `du "${filePath}"`)
+  private async getSdkVersion(): Promise<number> {
+    return await this.adb
+      .shell(this.serial, 'getprop ro.build.version.sdk')
       .then(adb.util.readAll)
-      .then((output: Buffer) => output.toString().trim().split('\t'))
-      .then((x) => Number(x[0]));
+      .then((output) => Number(output.toString().trim()));
+  }
 
-    // 4 is what an empty file (touch file) already takes up, so it's
-    // definitely not a valid video file.
-    return fileSize > 4;
+  private async isValidFile(filePath: string): Promise<boolean> {
+    const sdkVersion = await this.getSdkVersion();
+    const fileSize = await this.adb
+      .shell(this.serial, `ls -l "${filePath}"`)
+      .then(adb.util.readAll)
+      .then((output: Buffer) => output.toString().trim().split(' '))
+      .then((x) => x.filter(Boolean))
+      .then((x) => (sdkVersion > 23 ? Number(x[4]) : Number(x[3])));
+
+    return fileSize > 0;
   }
 
   async startScreenCapture(destination: string) {
@@ -166,7 +179,7 @@ export default class AndroidDevice extends BaseDevice {
         (_) =>
           new Promise((resolve, reject) => {
             this.adb.pull(this.serial, recordingLocation).then((stream) => {
-              stream.on('end', resolve);
+              stream.on('end', resolve as () => void);
               stream.on('error', reject);
               stream.pipe(createWriteStream(destination));
             });
@@ -182,9 +195,30 @@ export default class AndroidDevice extends BaseDevice {
     if (!recordingProcess) {
       return Promise.reject(new Error('Recording was not properly started'));
     }
-    await this.adb.shell(this.serial, `pgrep 'screenrecord' -L 2`);
+    await this.adb.shell(this.serial, `pkill -2 screenrecord`);
     const destination = await recordingProcess;
     this.recordingProcess = undefined;
     return destination;
   }
+}
+
+export async function launchEmulator(name: string) {
+  // On Linux, you must run the emulator from the directory it's in because
+  // reasons ...
+  return which('emulator')
+    .then((emulatorPath) => {
+      if (emulatorPath) {
+        const child = spawn(emulatorPath, [`@${name}`], {
+          detached: true,
+          cwd: dirname(emulatorPath),
+        });
+        child.stderr.on('data', (data) => {
+          console.error(`Android emulator error: ${data}`);
+        });
+        child.on('error', (e) => console.error(e));
+      } else {
+        throw new Error('Could not get emulator path');
+      }
+    })
+    .catch((e) => console.error(e));
 }

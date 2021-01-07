@@ -13,7 +13,7 @@ import Orderable from './Orderable';
 import FlexRow from './FlexRow';
 import {colors} from './colors';
 import Tab, {Props as TabProps} from './Tab';
-import {WidthProperty} from 'csstype';
+import {Property} from 'csstype';
 import React, {useContext} from 'react';
 import {TabsContext} from './TabsContainer';
 
@@ -25,9 +25,10 @@ TabList.displayName = 'Tabs:TabList';
 
 const TabListItem = styled.div<{
   active?: boolean;
-  width?: WidthProperty<number>;
+  width?: Property.Width<number>;
   container?: boolean;
 }>((props) => ({
+  userSelect: 'none',
   background: props.container
     ? props.active
       ? 'linear-gradient(to bottom, #67a6f7 0%, #0072FA 100%)'
@@ -103,6 +104,7 @@ const TabContent = styled.div({
   height: '100%',
   overflow: 'auto',
   width: '100%',
+  display: 'flex',
 });
 TabContent.displayName = 'Tabs:TabContent';
 

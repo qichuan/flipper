@@ -7,12 +7,18 @@
  * @format
  */
 
-import {FlipperDevicePlugin, FlipperPlugin, FlipperBasePlugin} from '../plugin';
+import {
+  FlipperDevicePlugin,
+  FlipperBasePlugin,
+  PluginDefinition,
+  DevicePluginDefinition,
+  isSandyPlugin,
+} from '../plugin';
 import {State as PluginStatesState} from '../reducers/pluginStates';
 import {State as PluginsState} from '../reducers/plugins';
 import {State as PluginMessageQueueState} from '../reducers/pluginMessageQueue';
-import {PluginDetails} from 'flipper-plugin-lib';
 import {deconstructPluginKey, deconstructClientId} from './clientUtils';
+import {_SandyPluginDefinition} from 'flipper-plugin';
 
 type Client = import('../Client').default;
 
@@ -20,18 +26,11 @@ export const defaultEnabledBackgroundPlugins = ['Navigation']; // The navigation
 
 export function pluginsClassMap(
   plugins: PluginsState,
-): Map<string, typeof FlipperDevicePlugin | typeof FlipperPlugin> {
-  const pluginsMap: Map<
-    string,
-    typeof FlipperDevicePlugin | typeof FlipperPlugin
-  > = new Map([]);
-  plugins.clientPlugins.forEach((val, key) => {
-    pluginsMap.set(key, val);
-  });
-  plugins.devicePlugins.forEach((val, key) => {
-    pluginsMap.set(key, val);
-  });
-  return pluginsMap;
+): Map<string, PluginDefinition> {
+  return new Map<string, PluginDefinition>([
+    ...plugins.clientPlugins.entries(),
+    ...plugins.devicePlugins.entries(),
+  ]);
 }
 
 export function getPluginKey(
@@ -83,14 +82,12 @@ export function getEnabledOrExportPersistedStatePlugins(
   plugins: PluginsState,
 ): Array<{id: string; label: string}> {
   const appName = deconstructClientId(client.id).app;
-  const pluginsMap: Map<
-    string,
-    typeof FlipperDevicePlugin | typeof FlipperPlugin
-  > = pluginsClassMap(plugins);
+  const pluginsMap: Map<string, PluginDefinition> = pluginsClassMap(plugins);
   // Enabled Plugins with no exportPersistedState function defined
   const enabledPlugins = starredPlugin[appName]
     ? starredPlugin[appName]
         .map((pluginName) => pluginsMap.get(pluginName)!)
+        .filter(Boolean)
         .filter((plugin) => {
           return !plugin.exportPersistedState;
         })
@@ -109,7 +106,8 @@ export function getEnabledOrExportPersistedStatePlugins(
         id: plugin,
         label: getPluginTitle(plugins.devicePlugins.get(plugin)!),
       };
-    });
+    })
+    .filter(Boolean);
   // Plugins which have defined exportPersistedState.
   const exportPersistedStatePlugins = client.plugins
     .filter((name) => {
@@ -141,101 +139,106 @@ export function getActivePersistentPlugins(
   plugins: PluginsState,
   selectedClient?: Client,
 ): {id: string; label: string}[] {
-  const pluginsMap: Map<
-    string,
-    typeof FlipperDevicePlugin | typeof FlipperPlugin
-  > = pluginsClassMap(plugins);
+  const pluginsMap = pluginsClassMap(plugins);
   return getPersistentPlugins(plugins)
     .map((pluginName) => pluginsMap.get(pluginName)!)
     .sort(sortPluginsByName)
-    .map((plugin) => {
-      const keys = [
-        ...new Set([
-          ...Object.keys(pluginsState),
-          ...Object.keys(pluginsMessageQueue),
-        ]),
-      ]
-        .filter((k) => !selectedClient || k.includes(selectedClient.id))
-        .map((key) => deconstructPluginKey(key).pluginName);
-      let result = plugin.id == 'DeviceLogs';
-      const pluginsWithExportPersistedState =
-        plugin && plugin.exportPersistedState != undefined;
-      const pluginsWithReduxData = keys.includes(plugin.id);
-      if (!result && selectedClient) {
-        // If there is a selected client, active persistent plugin is the plugin which is active for selectedClient and also persistent.
-        result =
-          selectedClient.plugins.includes(plugin.id) &&
-          (pluginsWithExportPersistedState || pluginsWithReduxData);
-      } else if (!result && !selectedClient) {
-        // If there is no selected client, active persistent plugin is the plugin which is just persistent.
-        result =
-          (plugin && plugin.exportPersistedState != undefined) ||
-          keys.includes(plugin.id);
+    .filter((plugin) => {
+      if (plugin.id == 'DeviceLogs') {
+        return true;
       }
-      return (result
-        ? {
-            id: plugin.id,
-            label: getPluginTitle(plugin),
-          }
-        : undefined)!;
+      if (selectedClient) {
+        const pluginKey = getPluginKey(
+          selectedClient.id,
+          {serial: selectedClient.query.device_id},
+          plugin.id,
+        );
+        // If there is a selected client, active persistent plugins are those that (can) have persisted state
+        return (
+          selectedClient.isEnabledPlugin(plugin.id) &&
+          // this plugin can fetch and export state
+          (plugin.exportPersistedState ||
+            // this plugin has some persisted state already
+            pluginsState[pluginKey] ||
+            pluginsMessageQueue[pluginKey] ||
+            // this plugin has some persistable sandy state
+            selectedClient.sandyPluginStates.get(plugin.id)?.isPersistable())
+        );
+      }
+      {
+        // If there is no selected client, active persistent plugin is the plugin which is just persistent.
+        const pluginsWithReduxData = [
+          ...new Set([
+            ...Object.keys(pluginsState),
+            ...Object.keys(pluginsMessageQueue),
+          ]),
+        ].map((key) => deconstructPluginKey(key).pluginName);
+        return (
+          (plugin && plugin.exportPersistedState != undefined) ||
+          isSandyPlugin(plugin) ||
+          pluginsWithReduxData.includes(plugin.id)
+        );
+      }
     })
-    .filter(Boolean);
+    .map((plugin) => ({
+      id: plugin.id,
+      label: getPluginTitle(plugin),
+    }));
 }
 
+/**
+ * Returns all enabled plugins that are potentially exportable
+ * @param plugins
+ */
 export function getPersistentPlugins(plugins: PluginsState): Array<string> {
-  const pluginsMap: Map<
-    string,
-    typeof FlipperDevicePlugin | typeof FlipperPlugin
-  > = pluginsClassMap(plugins);
+  const pluginsMap = pluginsClassMap(plugins);
 
-  const arr: Array<PluginDetails> = plugins.disabledPlugins.concat(
-    plugins.gatekeepedPlugins,
-  );
-  arr.forEach((plugin: PluginDetails) => {
-    if (pluginsMap.has(plugin.name)) {
+  [...plugins.disabledPlugins, ...plugins.gatekeepedPlugins].forEach(
+    (plugin) => {
       pluginsMap.delete(plugin.name);
-    }
+    },
+  );
+  plugins.failedPlugins.forEach(([details]) => {
+    pluginsMap.delete(details.id);
   });
 
-  plugins.failedPlugins.forEach((plugin: [PluginDetails, string]) => {
-    if (plugin[0] && plugin[0].name && pluginsMap.has(plugin[0].name)) {
-      pluginsMap.delete(plugin[0].name);
-    }
-  });
-
-  const activePlugins = [...pluginsMap.keys()];
-
-  return activePlugins.filter((plugin) => {
+  return Array.from(pluginsMap.keys()).filter((plugin) => {
     const pluginClass = pluginsMap.get(plugin);
     return (
       plugin == 'DeviceLogs' ||
-      (pluginClass &&
-        (pluginClass.defaultPersistedState != undefined ||
-          pluginClass.exportPersistedState != undefined))
+      isSandyPlugin(pluginClass) ||
+      pluginClass?.defaultPersistedState ||
+      pluginClass?.exportPersistedState
     );
   });
 }
 
-export function getPluginTitle(pluginClass: typeof FlipperBasePlugin) {
+export function getPluginTitle(pluginClass: {
+  title?: string | null;
+  id: string;
+}) {
   return pluginClass.title || pluginClass.id;
 }
 
 export function sortPluginsByName(
-  a: typeof FlipperBasePlugin,
-  b: typeof FlipperBasePlugin,
+  a: PluginDefinition,
+  b: PluginDefinition,
 ): number {
   // make sure Device plugins are sorted before normal plugins
-  if (
-    a.prototype instanceof FlipperDevicePlugin &&
-    !(b.prototype instanceof FlipperDevicePlugin)
-  ) {
+  if (isDevicePluginDefinition(a) && !isDevicePluginDefinition(b)) {
     return -1;
   }
-  if (
-    b.prototype instanceof FlipperDevicePlugin &&
-    !(a.prototype instanceof FlipperDevicePlugin)
-  ) {
+  if (isDevicePluginDefinition(b) && !isDevicePluginDefinition(a)) {
     return 1;
   }
   return getPluginTitle(a) > getPluginTitle(b) ? 1 : -1;
+}
+
+export function isDevicePluginDefinition(
+  definition: PluginDefinition,
+): definition is DevicePluginDefinition {
+  return (
+    (definition as any).prototype instanceof FlipperDevicePlugin ||
+    (definition instanceof _SandyPluginDefinition && definition.isDevicePlugin)
+  );
 }

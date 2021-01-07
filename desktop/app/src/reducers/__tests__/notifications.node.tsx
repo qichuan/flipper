@@ -7,14 +7,14 @@
  * @format
  */
 
-import {State} from '../notifications';
+import {State, addNotification, removeNotification} from '../notifications';
 
 import {
   default as reducer,
   setActiveNotifications,
   clearAllNotifications,
-  updatePluginBlacklist,
-  updateCategoryBlacklist,
+  updatePluginBlocklist,
+  updateCategoryBlocklist,
 } from '../notifications';
 
 import {Notification} from '../../plugin';
@@ -30,33 +30,33 @@ function getInitialState(): State {
   return {
     activeNotifications: [],
     invalidatedNotifications: [],
-    blacklistedPlugins: [],
-    blacklistedCategories: [],
+    blocklistedPlugins: [],
+    blocklistedCategories: [],
     clearedNotifications: new Set(),
   };
 }
 
-test('reduce updateCategoryBlacklist', () => {
-  const blacklistedCategories = ['blacklistedCategory'];
+test('reduce updateCategoryBlocklist', () => {
+  const blocklistedCategories = ['blocklistedCategory'];
   const res = reducer(
     getInitialState(),
-    updateCategoryBlacklist(blacklistedCategories),
+    updateCategoryBlocklist(blocklistedCategories),
   );
   expect(res).toEqual({
     ...getInitialState(),
-    blacklistedCategories,
+    blocklistedCategories,
   });
 });
 
-test('reduce updatePluginBlacklist', () => {
-  const blacklistedPlugins = ['blacklistedPlugin'];
+test('reduce updatePluginBlocklist', () => {
+  const blocklistedPlugins = ['blocklistedPlugin'];
   const res = reducer(
     getInitialState(),
-    updatePluginBlacklist(blacklistedPlugins),
+    updatePluginBlocklist(blocklistedPlugins),
   );
   expect(res).toEqual({
     ...getInitialState(),
-    blacklistedPlugins,
+    blocklistedPlugins,
   });
 });
 
@@ -105,4 +105,117 @@ test('reduce setActiveNotifications', () => {
       },
     ],
   });
+});
+
+test('addNotification removes duplicates', () => {
+  let res = reducer(
+    getInitialState(),
+    addNotification({
+      pluginId: 'test',
+      client: null,
+      notification,
+    }),
+  );
+  res = reducer(
+    res,
+    addNotification({
+      pluginId: 'test',
+      client: null,
+      notification: {
+        ...notification,
+        id: 'otherId',
+      },
+    }),
+  );
+  res = reducer(
+    res,
+    removeNotification({
+      pluginId: 'test',
+      client: null,
+      notificationId: 'id',
+    }),
+  );
+  expect(res).toMatchInlineSnapshot(`
+    Object {
+      "activeNotifications": Array [
+        Object {
+          "client": null,
+          "notification": Object {
+            "id": "otherId",
+            "message": "message",
+            "severity": "warning",
+            "title": "title",
+          },
+          "pluginId": "test",
+        },
+      ],
+      "blocklistedCategories": Array [],
+      "blocklistedPlugins": Array [],
+      "clearedNotifications": Set {},
+      "invalidatedNotifications": Array [],
+    }
+  `);
+});
+
+test('reduce removeNotification', () => {
+  let res = reducer(
+    getInitialState(),
+    addNotification({
+      pluginId: 'test',
+      client: null,
+      notification,
+    }),
+  );
+  res = reducer(
+    res,
+    addNotification({
+      pluginId: 'test',
+      client: null,
+      notification: {
+        ...notification,
+        id: 'otherId',
+      },
+    }),
+  );
+  res = reducer(
+    res,
+    addNotification({
+      pluginId: 'test',
+      client: null,
+      notification: {
+        ...notification,
+        message: 'slightly different message',
+      },
+    }),
+  );
+  expect(res).toMatchInlineSnapshot(`
+    Object {
+      "activeNotifications": Array [
+        Object {
+          "client": null,
+          "notification": Object {
+            "id": "otherId",
+            "message": "message",
+            "severity": "warning",
+            "title": "title",
+          },
+          "pluginId": "test",
+        },
+        Object {
+          "client": null,
+          "notification": Object {
+            "id": "id",
+            "message": "slightly different message",
+            "severity": "warning",
+            "title": "title",
+          },
+          "pluginId": "test",
+        },
+      ],
+      "blocklistedCategories": Array [],
+      "blocklistedPlugins": Array [],
+      "clearedNotifications": Set {},
+      "invalidatedNotifications": Array [],
+    }
+  `);
 });

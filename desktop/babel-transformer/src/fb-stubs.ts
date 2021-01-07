@@ -15,7 +15,7 @@ const isFBFile = (filePath: string) =>
   filePath.includes(`${path.sep}fb${path.sep}`);
 
 const requireFromFolder = (folder: string, path: string) =>
-  new RegExp(folder + '/[\\w.-_]+(.js)?$', 'g').test(path);
+  new RegExp(folder + '/[\\w.-]+(.js)?$', 'g').test(path);
 
 module.exports = () => ({
   name: 'replace-fb-stubs',
@@ -33,7 +33,7 @@ module.exports = () => ({
           !isFBFile(state.file.opts.filename)
         ) {
           throw new Error(
-            'For files which are not under fb/ do not require directly from fb/, but rather from fb-stubs/ to not break flow-typing and make sure stubs are up-to-date.',
+            'For files which are not under fb/ do not require directly from fb/, but rather from fb-stubs/ to not break typescript-typing and make sure stubs are up-to-date.',
           );
         } else if (
           requireFromFolder('fb-stubs', path.node.arguments[0].value)

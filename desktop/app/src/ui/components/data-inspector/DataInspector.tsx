@@ -21,7 +21,7 @@ import {colors} from '../colors';
 import {clipboard} from 'electron';
 import React from 'react';
 import {TooltipOptions} from '../TooltipProvider';
-import {useHighlighter} from '../Highlight';
+import {useHighlighter, HighlightManager} from '../Highlight';
 
 export {DataValueExtractor} from './DataPreview';
 
@@ -136,6 +136,18 @@ type DataInspectorProps = {
    * Callback whenever delete action is invoked on current path.
    */
   onDelete?: DataInspectorDeleteValue | undefined | null;
+  /**
+   * Render callback that can be used to customize the rendering of object keys.
+   */
+  onRenderName?: (
+    path: Array<string>,
+    name: string,
+    highlighter: HighlightManager,
+  ) => React.ReactElement;
+  /**
+   * Render callback that can be used to customize the rendering of object values.
+   */
+  onRenderDescription?: (description: React.ReactElement) => React.ReactElement;
   /**
    * Callback when a value is edited.
    */
@@ -302,21 +314,13 @@ function isComponentExpanded(data: any, diffType: string, diffValue: any) {
   return false;
 }
 
-type DataInspectorState = {
-  shouldExpand: boolean;
-  isExpanded: boolean;
-  isExpandable: boolean;
-  res: any;
-  resDiff: any;
-};
-
 const recursiveMarker = <RecursiveBaseWrapper>Recursive</RecursiveBaseWrapper>;
 
 /**
  * An expandable data inspector.
  *
  * This component is fairly low level. It's likely you're looking for
- * [`<ManagedDataInspector>`]().
+ * [`<ManagedDataInspector>`](#manageddatainspector).
  */
 const DataInspector: React.FC<DataInspectorProps> = memo(
   function DataInspectorImpl({
@@ -327,6 +331,8 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
     parentPath,
     onExpanded,
     onDelete,
+    onRenderName,
+    onRenderDescription,
     extractValue: extractValueProp,
     expanded: expandedPaths,
     name,
@@ -481,7 +487,8 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
 
       for (const key of keys) {
         const diffMetadataArr = diffMetadataExtractor(value, key, diffValue);
-        for (const metadata of diffMetadataArr) {
+        for (const [index, metadata] of diffMetadataArr.entries()) {
+          const metaKey = key + index;
           const dataInspectorNode = (
             <DataInspector
               parentAncestry={ancestry}
@@ -491,9 +498,11 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
               collapsed={collapsed}
               onExpanded={onExpanded}
               onDelete={onDelete}
+              onRenderName={onRenderName}
+              onRenderDescription={onRenderDescription}
               parentPath={path}
               depth={depth + 1}
-              key={key}
+              key={metaKey}
               name={key}
               data={metadata.data}
               diff={metadata.diff}
@@ -503,11 +512,13 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
 
           switch (metadata.status) {
             case 'added':
-              propertyNodes.push(<Added key={key}>{dataInspectorNode}</Added>);
+              propertyNodes.push(
+                <Added key={metaKey}>{dataInspectorNode}</Added>,
+              );
               break;
             case 'removed':
               propertyNodes.push(
-                <Removed key={key}>{dataInspectorNode}</Removed>,
+                <Removed key={metaKey}>{dataInspectorNode}</Removed>,
               );
               break;
             default:
@@ -530,12 +541,15 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
     // create name components
     const nameElems = [];
     if (typeof name !== 'undefined') {
+      const text = onRenderName
+        ? onRenderName(path, name, highlighter)
+        : highlighter.render(name);
       nameElems.push(
         <Tooltip
           title={tooltips != null && tooltips[name]}
           key="name"
           options={nameTooltipOptions}>
-          <InspectorName>{highlighter.render(name)}</InspectorName>
+          <InspectorName>{text}</InspectorName>
         </Tooltip>,
       );
       nameElems.push(<span key="sep">: </span>);
@@ -553,6 +567,10 @@ const DataInspector: React.FC<DataInspectorProps> = memo(
           extra={extra}
         />
       );
+
+      descriptionOrPreview = onRenderDescription
+        ? onRenderDescription(descriptionOrPreview)
+        : descriptionOrPreview;
     } else {
       descriptionOrPreview = (
         <DataPreview

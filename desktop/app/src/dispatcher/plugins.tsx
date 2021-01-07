@@ -9,7 +9,7 @@
 
 import {Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
-import {FlipperPlugin, FlipperDevicePlugin} from '../plugin';
+import {PluginDefinition} from '../plugin';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import adbkit from 'adbkit';
@@ -19,8 +19,9 @@ import {
   addGatekeepedPlugins,
   addDisabledPlugins,
   addFailedPlugins,
+  registerLoadedPlugins,
+  registerBundledPlugins,
 } from '../reducers/plugins';
-import {ipcRenderer, shell} from 'electron';
 import GK from '../fb-stubs/GK';
 import {FlipperBasePlugin} from '../plugin';
 import {setupMenuBar} from '../MenuBar';
@@ -30,111 +31,60 @@ import isProduction from '../utils/isProduction';
 import {notNull} from '../utils/typeUtils';
 import {sideEffect} from '../utils/sideEffect';
 import semver from 'semver';
-import {PluginDetails} from 'flipper-plugin-lib';
-import {addNotification} from '../reducers/notifications';
-import styled from '@emotion/styled';
+import {
+  ActivatablePluginDetails,
+  BundledPluginDetails,
+  PluginDetails,
+} from 'flipper-plugin-lib';
 import {tryCatchReportPluginFailures, reportUsage} from '../utils/metrics';
+import * as FlipperPluginSDK from 'flipper-plugin';
+import {_SandyPluginDefinition} from 'flipper-plugin';
+import loadDynamicPlugins from '../utils/loadDynamicPlugins';
+import Immer from 'immer';
 
 // eslint-disable-next-line import/no-unresolved
-import getPluginIndex from '../utils/getDefaultPluginsIndex';
+import getDefaultPluginsIndex from '../utils/getDefaultPluginsIndex';
 
-const Paragraph = styled.p({
-  marginBottom: '0.1em',
-});
+let defaultPluginsIndex: any = null;
 
-export default (store: Store, logger: Logger) => {
+export default async (store: Store, logger: Logger) => {
   // expose Flipper and exact globally for dynamically loaded plugins
   const globalObject: any = typeof window === 'undefined' ? global : window;
   globalObject.React = React;
   globalObject.ReactDOM = ReactDOM;
   globalObject.Flipper = Flipper;
   globalObject.adbkit = adbkit;
+  globalObject.FlipperPlugin = FlipperPluginSDK;
+  globalObject.Immer = Immer;
 
-  const gatekeepedPlugins: Array<PluginDetails> = [];
-  const disabledPlugins: Array<PluginDetails> = [];
-  const failedPlugins: Array<[PluginDetails, string]> = [];
+  const gatekeepedPlugins: Array<ActivatablePluginDetails> = [];
+  const disabledPlugins: Array<ActivatablePluginDetails> = [];
+  const failedPlugins: Array<[ActivatablePluginDetails, string]> = [];
 
-  const defaultPluginsIndex = getPluginIndex();
+  defaultPluginsIndex = getDefaultPluginsIndex();
 
-  const initialPlugins: Array<
-    typeof FlipperPlugin | typeof FlipperDevicePlugin
-  > = filterNewestVersionOfEachPlugin(getBundledPlugins(), getDynamicPlugins())
+  const uninstalledPlugins = store.getState().pluginManager.uninstalledPlugins;
+
+  const bundledPlugins = getBundledPlugins();
+
+  const loadedPlugins = filterNewestVersionOfEachPlugin(
+    bundledPlugins,
+    await getDynamicPlugins(),
+  ).filter((p) => !uninstalledPlugins.has(p.name));
+
+  const initialPlugins: PluginDefinition[] = loadedPlugins
     .map(reportVersion)
     .filter(checkDisabled(disabledPlugins))
     .filter(checkGK(gatekeepedPlugins))
-    .map(requirePlugin(failedPlugins, defaultPluginsIndex))
+    .map(createRequirePluginFunction(failedPlugins))
     .filter(notNull);
 
+  store.dispatch(registerBundledPlugins(bundledPlugins));
+  store.dispatch(registerLoadedPlugins(loadedPlugins));
   store.dispatch(addGatekeepedPlugins(gatekeepedPlugins));
   store.dispatch(addDisabledPlugins(disabledPlugins));
   store.dispatch(addFailedPlugins(failedPlugins));
   store.dispatch(registerPlugins(initialPlugins));
-  const deprecatedSpecPlugins = initialPlugins.filter(
-    (p) => !p.isDefault && p.details.specVersion === 1,
-  );
-  for (const plugin of deprecatedSpecPlugins) {
-    store.dispatch(
-      addNotification({
-        pluginId: plugin.id,
-        client: null,
-        notification: {
-          id: `plugin-spec-v1-deprecation-${plugin.packageName}`,
-          title: `Plugin "${plugin.title}" will stop working after version 0.48 of Flipper released, because it is packaged using the deprecated format.`,
-          message: (
-            <>
-              <Paragraph>
-                Please try to install a newer version of this plugin packaged
-                using "Install Plugins" tab on "Manage Plugins" form.
-              </Paragraph>
-              <Paragraph>
-                If the latest version of the plugin is still packaged in the old
-                format, please contact the author and consider raising a pull
-                request for upgrading the plugin. You can find contact details
-                on the package page&nbsp;
-                <a
-                  href={`#`}
-                  onClick={() =>
-                    shell.openExternal(
-                      `https://www.npmjs.com/package/${plugin.packageName}`,
-                    )
-                  }>
-                  https://www.npmjs.com/package/{plugin.packageName}
-                </a>
-                .
-              </Paragraph>
-              <Paragraph>
-                If you are the author of this plugin, please migrate your plugin
-                to the new format, and publish new version of it. See&nbsp;
-                <a
-                  href={`#`}
-                  onClick={() =>
-                    shell.openExternal(
-                      'https://fbflipper.com/docs/extending/js-setup#migration-to-the-new-plugin-specification',
-                    )
-                  }>
-                  https://fbflipper.com/docs/extending/js-setup#migration-to-the-new-plugin-specification
-                </a>
-                &nbsp;on how to migrate the plugin. See&nbsp;
-                <a
-                  href={`#`}
-                  onClick={() =>
-                    shell.openExternal(
-                      'https://fbflipper.com/docs/extending/js-setup#package-format',
-                    )
-                  }>
-                  https://fbflipper.com/docs/extending/js-setup#package-format
-                </a>
-                &nbsp;for details on plugin package format.
-              </Paragraph>
-            </>
-          ),
-          severity: 'error',
-          timestamp: Date.now(),
-          category: `Plugin Spec V1 Deprecation`,
-        },
-      }),
-    );
-  }
 
   sideEffect(
     store,
@@ -150,7 +100,7 @@ export default (store: Store, logger: Logger) => {
   );
 };
 
-function reportVersion(pluginDetails: PluginDetails) {
+function reportVersion(pluginDetails: ActivatablePluginDetails) {
   reportUsage(
     'plugin:version',
     {
@@ -161,11 +111,11 @@ function reportVersion(pluginDetails: PluginDetails) {
   return pluginDetails;
 }
 
-export function filterNewestVersionOfEachPlugin(
-  bundledPlugins: PluginDetails[],
-  dynamicPlugins: PluginDetails[],
-): PluginDetails[] {
-  const pluginByName: {[key: string]: PluginDetails} = {};
+export function filterNewestVersionOfEachPlugin<
+  T1 extends PluginDetails,
+  T2 extends PluginDetails
+>(bundledPlugins: T1[], dynamicPlugins: T2[]): (T1 | T2)[] {
+  const pluginByName: {[key: string]: T1 | T2} = {};
   for (const plugin of bundledPlugins) {
     pluginByName[plugin.name] = plugin;
   }
@@ -181,7 +131,7 @@ export function filterNewestVersionOfEachPlugin(
   return Object.values(pluginByName);
 }
 
-function getBundledPlugins(): Array<PluginDetails> {
+function getBundledPlugins(): Array<BundledPluginDetails> {
   // DefaultPlugins that are included in the bundle.
   // List of defaultPlugins is written at build time
   const pluginPath =
@@ -190,7 +140,7 @@ function getBundledPlugins(): Array<PluginDetails> {
       ? path.join(__dirname, 'defaultPlugins')
       : './defaultPlugins/index.json');
 
-  let bundledPlugins: Array<PluginDetails> = [];
+  let bundledPlugins: Array<BundledPluginDetails> = [];
   try {
     bundledPlugins = global.electronRequire(pluginPath);
   } catch (e) {
@@ -200,18 +150,17 @@ function getBundledPlugins(): Array<PluginDetails> {
   return bundledPlugins;
 }
 
-export function getDynamicPlugins() {
-  let dynamicPlugins: Array<PluginDetails> = [];
+export async function getDynamicPlugins() {
   try {
-    dynamicPlugins = ipcRenderer.sendSync('get-dynamic-plugins');
+    return await loadDynamicPlugins();
   } catch (e) {
-    console.error(e);
+    console.error('Failed to load dynamic plugins', e);
+    return [];
   }
-  return dynamicPlugins;
 }
 
-export const checkGK = (gatekeepedPlugins: Array<PluginDetails>) => (
-  plugin: PluginDetails,
+export const checkGK = (gatekeepedPlugins: Array<ActivatablePluginDetails>) => (
+  plugin: ActivatablePluginDetails,
 ): boolean => {
   if (!plugin.gatekeeper) {
     return true;
@@ -223,37 +172,45 @@ export const checkGK = (gatekeepedPlugins: Array<PluginDetails>) => (
   return result;
 };
 
-export const checkDisabled = (disabledPlugins: Array<PluginDetails>) => (
-  plugin: PluginDetails,
-): boolean => {
+export const checkDisabled = (
+  disabledPlugins: Array<ActivatablePluginDetails>,
+) => {
+  const enabledList = process.env.FLIPPER_ENABLED_PLUGINS
+    ? new Set<string>(process.env.FLIPPER_ENABLED_PLUGINS.split(','))
+    : null;
   let disabledList: Set<string> = new Set();
   try {
     disabledList = config().disabledPlugins;
   } catch (e) {
     console.error(e);
   }
-
-  if (disabledList.has(plugin.name)) {
-    disabledPlugins.push(plugin);
-  }
-
-  return !disabledList.has(plugin.name);
+  return (plugin: ActivatablePluginDetails): boolean => {
+    if (disabledList.has(plugin.name)) {
+      disabledPlugins.push(plugin);
+      return false;
+    }
+    if (
+      enabledList &&
+      !(
+        enabledList.has(plugin.name) ||
+        enabledList.has(plugin.id) ||
+        enabledList.has(plugin.name.replace('flipper-plugin-', ''))
+      )
+    ) {
+      disabledPlugins.push(plugin);
+      return false;
+    }
+    return true;
+  };
 };
 
-export const requirePlugin = (
-  failedPlugins: Array<[PluginDetails, string]>,
-  defaultPluginsIndex: any,
+export const createRequirePluginFunction = (
+  failedPlugins: Array<[ActivatablePluginDetails, string]>,
   reqFn: Function = global.electronRequire,
 ) => {
-  return (
-    pluginDetails: PluginDetails,
-  ): typeof FlipperPlugin | typeof FlipperDevicePlugin | null => {
+  return (pluginDetails: ActivatablePluginDetails): PluginDefinition | null => {
     try {
-      return tryCatchReportPluginFailures(
-        () => requirePluginInternal(pluginDetails, defaultPluginsIndex, reqFn),
-        'plugin:load',
-        pluginDetails.id,
-      );
+      return requirePlugin(pluginDetails, reqFn);
     } catch (e) {
       failedPlugins.push([pluginDetails, e.message]);
       console.error(`Plugin ${pluginDetails.id} failed to load`, e);
@@ -262,30 +219,59 @@ export const requirePlugin = (
   };
 };
 
-const requirePluginInternal = (
-  pluginDetails: PluginDetails,
-  defaultPluginsIndex: any,
+export const requirePlugin = (
+  pluginDetails: ActivatablePluginDetails,
   reqFn: Function = global.electronRequire,
-) => {
-  let plugin = pluginDetails.isDefault
+): PluginDefinition => {
+  reportUsage(
+    'plugin:load',
+    {
+      version: pluginDetails.version,
+    },
+    pluginDetails.id,
+  );
+  return tryCatchReportPluginFailures(
+    () => requirePluginInternal(pluginDetails, reqFn),
+    'plugin:load',
+    pluginDetails.id,
+  );
+};
+
+const requirePluginInternal = (
+  pluginDetails: ActivatablePluginDetails,
+  reqFn: Function = global.electronRequire,
+): PluginDefinition => {
+  let plugin = pluginDetails.isBundled
     ? defaultPluginsIndex[pluginDetails.name]
     : reqFn(pluginDetails.entry);
-  if (plugin.default) {
-    plugin = plugin.default;
-  }
-  if (!(plugin.prototype instanceof FlipperBasePlugin)) {
-    throw new Error(`Plugin ${plugin.name} is not a FlipperBasePlugin`);
-  }
-
-  plugin.id = plugin.id || pluginDetails.id;
-  plugin.packageName = pluginDetails.name;
-  plugin.details = pluginDetails;
-
-  // set values from package.json as static variables on class
-  Object.keys(pluginDetails).forEach((key) => {
-    if (key !== 'name' && key !== 'id') {
-      plugin[key] = plugin[key] || pluginDetails[key as keyof PluginDetails];
+  if (pluginDetails.flipperSDKVersion) {
+    // Sandy plugin
+    return new _SandyPluginDefinition(pluginDetails, plugin);
+  } else {
+    // classic plugin
+    if (plugin.default) {
+      plugin = plugin.default;
     }
-  });
+    if (!(plugin.prototype instanceof FlipperBasePlugin)) {
+      throw new Error(`Plugin ${plugin.name} is not a FlipperBasePlugin`);
+    }
+
+    if (plugin.id && pluginDetails.id !== plugin.id) {
+      console.error(
+        `Plugin name mismatch: Package '${pluginDetails.id}' exposed a plugin with id '${plugin.id}'. Please update the 'package.json' to match the exposed plugin id`,
+      );
+    }
+    plugin.id = plugin.id || pluginDetails.id;
+    plugin.packageName = pluginDetails.name;
+    plugin.details = pluginDetails;
+
+    // set values from package.json as static variables on class
+    Object.keys(pluginDetails).forEach((key) => {
+      if (key !== 'name' && key !== 'id') {
+        plugin[key] =
+          plugin[key] || pluginDetails[key as keyof ActivatablePluginDetails];
+      }
+    });
+  }
   return plugin;
 };

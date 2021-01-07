@@ -20,6 +20,7 @@ const glob = promisify(globImport);
 export interface Package {
   dir: string;
   json: any;
+  isPrivate: boolean;
   isPlugin: boolean;
 }
 
@@ -50,7 +51,11 @@ async function getWorkspacesByRoot(
       return {
         dir,
         json,
-        isPlugin: dir.startsWith(pluginsDir),
+        isPrivate: json.private || dir.startsWith(pluginsDir),
+        isPlugin:
+          json.keywords &&
+          Array.isArray(json.keywords) &&
+          json.keywords.includes('flipper-plugin'),
       };
     },
   );
@@ -58,6 +63,7 @@ async function getWorkspacesByRoot(
     rootPackage: {
       dir: rootDir,
       json: rootPackageJson,
+      isPrivate: true,
       isPlugin: false,
     },
     packages,
@@ -195,9 +201,7 @@ export async function publishPackages({
   if (proxy) {
     cmd += ` --http-proxy ${proxy} --https-proxy ${proxy}`;
   }
-  const publicPackages = workspaces.packages.filter(
-    (pkg) => !pkg.json.private && !pkg.isPlugin,
-  );
+  const publicPackages = workspaces.packages.filter((pkg) => !pkg.isPrivate);
   for (const pkg of publicPackages) {
     if (dryRun) {
       console.log(`DRYRUN: Skipping npm publishing for ${pkg.json.name}`);
@@ -206,4 +210,48 @@ export async function publishPackages({
       execSync(cmd, {cwd: pkg.dir, stdio: 'inherit'});
     }
   }
+}
+
+export async function resolvePluginDir(name: string): Promise<string> {
+  const pluginDir =
+    (await resolvePluginByNameOrId(name)) ?? (await resolvePluginByPath(name));
+  if (!pluginDir) {
+    throw new Error(`Cannot find plugin by name or dir ${name}`);
+  } else {
+    return pluginDir;
+  }
+}
+
+async function resolvePluginByNameOrId(
+  pluginName: string,
+): Promise<string | undefined> {
+  const workspaces = await getWorkspaces();
+  const pluginDir = workspaces.packages
+    .filter((p) => p.isPlugin)
+    .find(
+      (p) =>
+        p.json.name === pluginName ||
+        p.json.id === pluginName ||
+        p.json.name === `flipper-plugin-${pluginName}`,
+    )?.dir;
+  return pluginDir;
+}
+
+async function resolvePluginByPath(dir: string): Promise<string | undefined> {
+  if (path.isAbsolute(dir)) {
+    if (await fs.pathExists(dir)) {
+      return dir;
+    } else {
+      return undefined;
+    }
+  }
+  const resolvedFromPluginDir = path.resolve(pluginsDir, dir);
+  if (await fs.pathExists(resolvedFromPluginDir)) {
+    return resolvedFromPluginDir;
+  }
+  const resolvedFromCwd = path.resolve(process.cwd(), dir);
+  if (await fs.pathExists(resolvedFromCwd)) {
+    return resolvedFromCwd;
+  }
+  return undefined;
 }

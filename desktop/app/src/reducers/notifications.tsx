@@ -9,8 +9,15 @@
 
 import {Notification} from '../plugin';
 import {Actions} from './';
+import {getStringFromErrorLike} from '../utils';
 export type PluginNotification = {
   notification: Notification;
+  pluginId: string;
+  client: null | string;
+};
+
+export type PluginNotificationReference = {
+  notificationId: string;
   pluginId: string;
   client: null | string;
 };
@@ -18,8 +25,8 @@ export type PluginNotification = {
 export type State = {
   activeNotifications: Array<PluginNotification>;
   invalidatedNotifications: Array<PluginNotification>;
-  blacklistedPlugins: Array<string>;
-  blacklistedCategories: Array<string>;
+  blocklistedPlugins: Array<string>;
+  blocklistedCategories: Array<string>;
   clearedNotifications: Set<string>;
 };
 
@@ -45,23 +52,27 @@ export type Action =
       };
     }
   | {
-      type: 'UPDATE_PLUGIN_BLACKLIST';
+      type: 'UPDATE_PLUGIN_BLOCKLIST';
       payload: Array<string>;
     }
   | {
-      type: 'UPDATE_CATEGORY_BLACKLIST';
+      type: 'UPDATE_CATEGORY_BLOCKLIST';
       payload: Array<string>;
     }
   | {
       type: 'ADD_NOTIFICATION';
       payload: PluginNotification;
+    }
+  | {
+      type: 'REMOVE_NOTIFICATION';
+      payload: PluginNotificationReference;
     };
 
 const INITIAL_STATE: State = {
   activeNotifications: [],
   invalidatedNotifications: [],
-  blacklistedPlugins: [],
-  blacklistedCategories: [],
+  blocklistedPlugins: [],
+  blocklistedCategories: [],
   clearedNotifications: new Set(),
 };
 
@@ -88,20 +99,41 @@ export default function reducer(
         activeNotifications: [],
         invalidatedNotifications: [],
       };
-    case 'UPDATE_PLUGIN_BLACKLIST':
+    case 'UPDATE_PLUGIN_BLOCKLIST':
       return {
         ...state,
-        blacklistedPlugins: action.payload,
+        blocklistedPlugins: action.payload,
       };
-    case 'UPDATE_CATEGORY_BLACKLIST':
+    case 'UPDATE_CATEGORY_BLOCKLIST':
       return {
         ...state,
-        blacklistedCategories: action.payload,
+        blocklistedCategories: action.payload,
       };
     case 'ADD_NOTIFICATION':
       return {
         ...state,
-        activeNotifications: [...state.activeNotifications, action.payload],
+        // while adding notifications, remove old duplicates
+        activeNotifications: [
+          ...state.activeNotifications.filter(
+            (notif) =>
+              notif.client !== action.payload.client ||
+              notif.pluginId !== action.payload.pluginId ||
+              notif.notification.id !== action.payload.notification.id,
+          ),
+          action.payload,
+        ],
+      };
+    case 'REMOVE_NOTIFICATION':
+      return {
+        ...state,
+        activeNotifications: [
+          ...state.activeNotifications.filter(
+            (notif) =>
+              notif.client !== action.payload.client ||
+              notif.pluginId !== action.payload.pluginId ||
+              notif.notification.id !== action.payload.notificationId,
+          ),
+        ],
       };
     default:
       return state;
@@ -156,6 +188,34 @@ export function addNotification(payload: PluginNotification): Action {
   };
 }
 
+export function removeNotification(
+  payload: PluginNotificationReference,
+): Action {
+  return {
+    type: 'REMOVE_NOTIFICATION',
+    payload,
+  };
+}
+
+export function addErrorNotification(
+  title: string,
+  message: string,
+  error?: any,
+): Action {
+  // TODO: use this method for https://github.com/facebook/flipper/pull/1478/files as well
+  console.error(title, message, error);
+  return addNotification({
+    client: null,
+    pluginId: 'globalError',
+    notification: {
+      id: title,
+      title,
+      message: error ? message + ' ' + getStringFromErrorLike(error) : message,
+      severity: 'error',
+    },
+  });
+}
+
 export function setActiveNotifications(payload: {
   notifications: Array<Notification>;
   client: null | string;
@@ -173,16 +233,16 @@ export function clearAllNotifications(): Action {
   };
 }
 
-export function updatePluginBlacklist(payload: Array<string>): Action {
+export function updatePluginBlocklist(payload: Array<string>): Action {
   return {
-    type: 'UPDATE_PLUGIN_BLACKLIST',
+    type: 'UPDATE_PLUGIN_BLOCKLIST',
     payload,
   };
 }
 
-export function updateCategoryBlacklist(payload: Array<string>): Action {
+export function updateCategoryBlocklist(payload: Array<string>): Action {
   return {
-    type: 'UPDATE_CATEGORY_BLACKLIST',
+    type: 'UPDATE_CATEGORY_BLOCKLIST',
     payload,
   };
 }

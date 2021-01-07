@@ -44,9 +44,10 @@ export function initJsEmulatorIPC(
     (_event: IpcRendererEvent, message: any) => {
       const {windowId} = message;
       const {plugins, appName} = message.payload;
+      const device = new JSDevice(jsDeviceId(windowId), 'jsEmulator', windowId);
       store.dispatch({
         type: 'REGISTER_DEVICE',
-        payload: new JSDevice(jsDeviceId(windowId), 'jsEmulator', windowId),
+        payload: device,
       });
 
       const connection = new JSClientFlipperConnection(windowId);
@@ -69,6 +70,7 @@ export function initJsEmulatorIPC(
         logger,
         store,
         plugins,
+        device,
       );
 
       flipperConnections.set(clientId, {
@@ -131,6 +133,7 @@ export function launchJsEmulator(url: string, height: number, width: number) {
     height: height,
     width: width,
     webPreferences: {
+      enableRemoteModule: true,
       preload: require('path').join(
         remote.app.getAppPath(),
         'SupportJSClientPreload.js',

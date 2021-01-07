@@ -29,8 +29,12 @@ import InspectorSidebar from './InspectorSidebar';
 import Search from './Search';
 import ProxyArchiveClient from './ProxyArchiveClient';
 import React from 'react';
-import {VisualizerPortal} from 'flipper';
-import {getFlipperMediaCDN} from 'flipper';
+import {
+  VisualizerPortal,
+  getFlipperMediaCDN,
+  IDEFileResolver,
+  IDEType,
+} from 'flipper';
 
 type State = {
   init: boolean;
@@ -56,6 +60,19 @@ export type PersistedState = {
 };
 type ClientGetNodesCalls = 'getNodes' | 'getAXNodes';
 type ClientMethodCalls = 'getRoot' | 'getAXRoot' | ClientGetNodesCalls;
+
+type ClassFileParams = {
+  fileName: string;
+  className: string;
+  dirRoot: string;
+};
+
+type OpenFileParams = {
+  resolvedPath: string;
+  ide: IDEType;
+  repo: string;
+  lineNumber: number;
+};
 
 export default class LayoutPlugin extends FlipperPlugin<
   State,
@@ -187,6 +204,8 @@ export default class LayoutPlugin extends FlipperPlugin<
     screenDimensions: null,
   };
 
+  private static isMylesInvoked = false;
+
   init() {
     if (!this.props.persistedState) {
       // If the selected plugin from the previous session was layout, then while importing the flipper export, the redux store doesn't get updated in the first render, due to which the plugin crashes, as it has no persisted state
@@ -205,8 +224,23 @@ export default class LayoutPlugin extends FlipperPlugin<
       }
     });
 
+    this.client.subscribe('resolvePath', (params: ClassFileParams) => {
+      this.resolvePath(params);
+    });
+
+    this.client.subscribe('openInIDE', (params: OpenFileParams) => {
+      this.openInIDE(params);
+    });
+
+    // since the first launch of Myles might produce a lag (Myles daemon needs to start)
+    // try to invoke Myles during the first launch of the Layout Plugin
+    if (!LayoutPlugin.isMylesInvoked) {
+      this.invokeMyles();
+      LayoutPlugin.isMylesInvoked = true;
+    }
+
     if (this.props.isArchivedDevice) {
-      this.getDevice()
+      Promise.resolve(this.device)
         .then((d) => {
           const handle = (d as ArchivedDevice).getArchivedScreenshotHandle();
           if (!handle) {
@@ -223,11 +257,41 @@ export default class LayoutPlugin extends FlipperPlugin<
 
     this.setState({
       init: true,
-      selectedElement: this.props.deepLinkPayload
-        ? this.props.deepLinkPayload
-        : null,
+      selectedElement:
+        typeof this.props.deepLinkPayload === 'string'
+          ? this.props.deepLinkPayload
+          : null,
     });
   }
+
+  resolvePath = async (params: ClassFileParams) => {
+    const paths = await IDEFileResolver.resolveFullPathsFromMyles(
+      params.fileName,
+      params.dirRoot,
+    );
+    const resolvedPath = IDEFileResolver.getBestPath(paths, params.className);
+    this.client.send('setResolvedPath', {
+      className: params.className,
+      resolvedPath: resolvedPath,
+    });
+  };
+
+  openInIDE = async (params: OpenFileParams) => {
+    let ide: IDEType = Number(IDEType[params.ide]);
+    if (Number.isNaN(ide)) {
+      ide = IDEType.AS; // default value
+    }
+    IDEFileResolver.openInIDE(
+      params.resolvedPath,
+      ide,
+      params.repo,
+      params.lineNumber,
+    );
+  };
+
+  invokeMyles = async () => {
+    await IDEFileResolver.resolveFullPathsFromMyles('.config', 'fbsource');
+  };
 
   onToggleTargetMode = () => {
     const inTargetMode = !this.state.inTargetMode;
@@ -288,6 +352,11 @@ export default class LayoutPlugin extends FlipperPlugin<
     const id = this.state.inAXMode
       ? this.state.selectedAXElement
       : this.state.selectedElement;
+    this.props.logger.track('usage', 'layoutInspector:setData', {
+      category: path[0],
+      path: Array.from(path).splice(1).join(),
+      ...this.realClient.query,
+    });
     this.client.call('setData', {
       id,
       path,
@@ -344,7 +413,6 @@ export default class LayoutPlugin extends FlipperPlugin<
       selectedAXElement: this.state.selectedAXElement,
       setPersistedState: this.props.setPersistedState,
       persistedState: this.props.persistedState,
-      onDataValueChanged: this.onDataValueChanged,
       searchResults: this.state.searchResults,
     };
 
@@ -427,7 +495,11 @@ export default class LayoutPlugin extends FlipperPlugin<
                 this.setState({searchResults})
               }
               inAXMode={this.state.inAXMode}
-              initialQuery={this.props.deepLinkPayload}
+              initialQuery={
+                typeof this.props.deepLinkPayload === 'string'
+                  ? this.props.deepLinkPayload
+                  : null
+              }
             />
           </Toolbar>
           <Layout.Right>

@@ -9,6 +9,8 @@
 
 import {render, fireEvent} from '@testing-library/react';
 import React from 'react';
+// TODO T71355623
+// eslint-disable-next-line flipper/no-relative-imports-across-packages
 import reducers, {Store} from '../../../app/src/reducers';
 import configureStore from 'redux-mock-store';
 import {Provider} from 'react-redux';
@@ -132,12 +134,15 @@ test('editing some field after trigger Edit', async () => {
   fireEvent.click(res.getByText('Edit'));
   // still find all values because it needs to show up
   for (const value of values) {
-    if (value.type === 'blob') {
-      continue;
-    }
-    const searchValue: string =
-      value.type === 'null' ? 'NULL' : value.value.toString();
-    expect(res.queryAllByText(searchValue).length).toBeGreaterThan(0);
+    const searchValue = value.value?.toString();
+    expect(
+      (value.type === 'null'
+        ? res.queryAllByPlaceholderText('NULL')
+        : value.type === 'blob'
+        ? res.queryAllByText(searchValue!)
+        : res.queryAllByDisplayValue(searchValue!)
+      ).length,
+    ).toBeGreaterThan(0);
   }
 
   // expect the last one to contain value of 'db_1_column9_value'

@@ -8,13 +8,13 @@
 #include "ConnectionContextStore.h"
 #include <folly/json.h>
 #include <folly/portability/SysStat.h>
-#include <stdio.h>
 #include <fstream>
 #include <iostream>
 #include "CertificateUtils.h"
 #include "Log.h"
 
-using namespace facebook::flipper;
+namespace facebook {
+namespace flipper {
 
 static constexpr auto CSR_FILE_NAME = "app.csr";
 static constexpr auto FLIPPER_CA_FILE_NAME = "sonarCA.crt";
@@ -57,7 +57,7 @@ std::string ConnectionContextStore::getCertificateSigningRequest() {
 
   // Clean all state and generate a new one
   resetState();
-  bool success = generateCertSigningRequest(
+  bool success = facebook::flipper::generateCertSigningRequest(
       deviceData_.appId.c_str(),
       absoluteFilePath(CSR_FILE_NAME).c_str(),
       absoluteFilePath(PRIVATE_KEY_FILE).c_str());
@@ -164,3 +164,6 @@ bool fileExists(std::string fileName) {
   struct stat buffer;
   return stat(fileName.c_str(), &buffer) == 0;
 }
+
+} // namespace flipper
+} // namespace facebook

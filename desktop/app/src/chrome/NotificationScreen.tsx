@@ -18,9 +18,9 @@ import {selectPlugin} from '../reducers/connections';
 import React from 'react';
 
 type StateFromProps = {
-  deepLinkPayload: string | null;
-  blacklistedPlugins: Array<string>;
-  blacklistedCategories: Array<string>;
+  deepLinkPayload: unknown;
+  blocklistedPlugins: Array<string>;
+  blocklistedCategories: Array<string>;
 };
 
 type DispatchFromProps = {
@@ -28,7 +28,7 @@ type DispatchFromProps = {
   selectPlugin: (payload: {
     selectedPlugin: string | null;
     selectedApp: string | null | undefined;
-    deepLinkPayload: string | null;
+    deepLinkPayload: unknown;
   }) => any;
 };
 
@@ -50,8 +50,8 @@ const Container = styled(FlexColumn)({
 class Notifications extends PureComponent<Props, State> {
   render() {
     const {
-      blacklistedPlugins,
-      blacklistedCategories,
+      blocklistedPlugins,
+      blocklistedCategories,
       deepLinkPayload,
       logger,
       clearAllNotifications,
@@ -62,16 +62,18 @@ class Notifications extends PureComponent<Props, State> {
         <Container>
           <ConnectedNotificationsTable
             onClear={clearAllNotifications}
-            selectedID={deepLinkPayload}
+            selectedID={
+              typeof deepLinkPayload === 'string' ? deepLinkPayload : null
+            }
             onSelectPlugin={selectPlugin}
             logger={logger}
             defaultFilters={[
-              ...blacklistedPlugins.map((value) => ({
+              ...blocklistedPlugins.map((value) => ({
                 value,
                 type: 'exclude',
                 key: 'plugin',
               })),
-              ...blacklistedCategories.map((value) => ({
+              ...blocklistedCategories.map((value) => ({
                 value,
                 type: 'exclude',
                 key: 'category',
@@ -92,11 +94,11 @@ class Notifications extends PureComponent<Props, State> {
 export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
   ({
     connections: {deepLinkPayload},
-    notifications: {blacklistedPlugins, blacklistedCategories},
+    notifications: {blocklistedPlugins, blocklistedCategories},
   }) => ({
     deepLinkPayload,
-    blacklistedPlugins,
-    blacklistedCategories,
+    blocklistedPlugins,
+    blocklistedCategories,
   }),
   {clearAllNotifications, selectPlugin},
 )(Notifications);

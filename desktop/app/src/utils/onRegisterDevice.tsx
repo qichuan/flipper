@@ -8,21 +8,25 @@
  */
 
 import {Store} from '../reducers/index';
-import {FlipperPlugin, FlipperDevicePlugin} from '../plugin';
+import {
+  ClientPluginMap,
+  DevicePluginMap,
+  PluginDefinition,
+  isSandyPlugin,
+} from '../plugin';
 import {setPluginState} from '../reducers/pluginStates';
 import BaseDevice from '../devices/BaseDevice';
 import {getPersistedState} from '../utils/pluginUtils';
 
 export function registerDeviceCallbackOnPlugins(
   store: Store,
-  devicePlugins: Map<string, typeof FlipperDevicePlugin>,
-  clientPlugins: Map<string, typeof FlipperPlugin>,
+  devicePlugins: DevicePluginMap,
+  clientPlugins: ClientPluginMap,
   device: BaseDevice,
 ) {
-  const callRegisterDeviceHook = (
-    plugin: typeof FlipperDevicePlugin | typeof FlipperPlugin,
-  ) => {
-    if (plugin.onRegisterDevice) {
+  const callRegisterDeviceHook = (plugin: PluginDefinition) => {
+    // This hook is not registered for Sandy plugins, let's see in the future if it is needed
+    if (!isSandyPlugin(plugin) && plugin.onRegisterDevice) {
       plugin.onRegisterDevice(
         store,
         device,

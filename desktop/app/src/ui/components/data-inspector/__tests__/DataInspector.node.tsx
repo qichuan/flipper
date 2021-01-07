@@ -10,12 +10,6 @@
 import * as React from 'react';
 import {render, fireEvent, waitFor, act} from '@testing-library/react';
 
-try {
-  jest.mock('../../../../fb/Logger');
-} catch {
-  jest.mock('../../../../fb-stubs/Logger');
-}
-
 import ManagedDataInspector from '../ManagedDataInspector';
 import {sleep} from '../../../../utils';
 
@@ -67,7 +61,7 @@ test('changing collapsed property works', async () => {
   res.rerender(
     <ManagedDataInspector data={json} collapsed={false} expandRoot />,
   );
-  await waitFor(() => res.findByText(/cool/));
+  await res.findByText(/cool/);
 
   res.rerender(
     <ManagedDataInspector data={json} collapsed={true} expandRoot />,

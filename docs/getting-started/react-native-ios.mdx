@@ -1,8 +1,12 @@
 ---
 id: react-native-ios
 title: Manually set up your React Native iOS App
-sidebar_label: React Native for iOS
+sidebar_label: Manual iOS Setup
 ---
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import Link from '@docusaurus/Link';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 These instructions are aimed at people manually adding Flipper to a React Native 0.62+ app.
 This should only be necessary if you have an existing app that cannot be upgraded with the
@@ -10,13 +14,42 @@ This should only be necessary if you have an existing app that cannot be upgrade
 
 ## Dependencies
 
-Add this code to your `ios/Podfile`:
+### React Native 0.63+
+
+If using React Native 0.63 or later, your `ios/Podfile` should look like this:
+
+```ruby
+platform :ios, '10.0'
+
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
+
+target 'your-app-name' do
+  config = use_native_modules!
+  use_react_native!(path: config['reactNativePath'])
+
+  # Enables Flipper.
+  #
+  # Note that if you have use_frameworks! enabled, Flipper will not work and
+  # you should disable these next few lines.
+  use_flipper!('Flipper' => '0.58.0') # should match the version of your Flipper client app
+  post_install do |installer|
+    flipper_post_install(installer)
+  end
+end
+```
+
+Install the dependencies by running `cd ios && pod install`. Then continue to [Initialization](#initialization).
+
+### React Native 0.62
+
+In 0.62, the setup includes a bit more code (which was moved to a helper in 0.63). Add all of the code below to your `ios/Podfile`:
 
 ```ruby
 platform :ios, '9.0'
 
 def flipper_pods()
-  flipperkit_version = '0.47.0'
+  flipperkit_version = '0.58.0' # should match the version of your Flipper client app
   pod 'FlipperKit', '~>' + flipperkit_version, :configuration => 'Debug'
   pod 'FlipperKit/FlipperKitLayoutPlugin', '~>' + flipperkit_version, :configuration => 'Debug'
   pod 'FlipperKit/SKIOSNetworkPlugin', '~>' + flipperkit_version, :configuration => 'Debug'
@@ -44,11 +77,8 @@ end
 
 target 'your-app-name' do
   ...
-
-
   # Replace the existing yoga import with the following (adding modular_headers):
   pod 'Yoga', :path => '../node_modules/react-native/ReactCommon/yoga', :modular_headers => true
-
   ...
   use_native_modules!
 
@@ -74,9 +104,8 @@ The code below enables the following integrations:
 - Shared Preferences
 - Crash Reporter
 
-<!--DOCUSAURUS_CODE_TABS-->
-
-<!--Objective-C-->
+<Tabs defaultValue="ios" values={[{ label: 'iOS', value: 'ios'}, { label: 'Swift', value: 'swift'}]}>
+<TabItem value="ios">
 
 ```objective-c
 ...
@@ -117,7 +146,8 @@ The code below enables the following integrations:
 @end
 ```
 
-<!--Swift-->
+</TabItem>
+<TabItem value="swift">
 
 ```swift
 ...
@@ -157,14 +187,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 ```
 
-<!--END_DOCUSAURUS_CODE_TABS-->
+</TabItem>
+</Tabs>
 
 Lastly, open the Flipper desktop app, and run `yarn ios` in your terminal.
 
 ## Troubleshooting
 
-See the [troubleshooting page](../troubleshooting) for help with known problems.
+See the <Link to={useBaseUrl("/docs/troubleshooting")}>troubleshooting page</Link> for help with known problems.
 
 ## Further Steps
 
-To create your own plugins and integrate with Flipper using JavaScript, check out our [writing plugins for React Native](../tutorial/react-native) tutorial!
+To create your own plugins and integrate with Flipper using JavaScript, check out our <Link to={useBaseUrl("/docs/tutorial/react-native")}>writing plugins for React Native</Link> tutorial!

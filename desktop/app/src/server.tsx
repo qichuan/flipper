@@ -7,10 +7,13 @@
  * @format
  */
 
-import {SecureServerConfig} from './utils/CertificateProvider';
+import {
+  SecureServerConfig,
+  CertificateExchangeMedium,
+} from './utils/CertificateProvider';
 import {Logger} from './fb-interfaces/Logger';
 import {ClientQuery} from './Client';
-import {Store} from './reducers/index';
+import {Store, State} from './reducers/index';
 import CertificateProvider from './utils/CertificateProvider';
 import {RSocketServer} from 'rsocket-core';
 import RSocketTCPServer from 'rsocket-tcp-server';
@@ -33,6 +36,10 @@ import {WebsocketClientFlipperConnection} from './utils/js-client-server-utils/w
 import querystring from 'querystring';
 import {IncomingMessage} from 'http';
 import ws from 'ws';
+import {initSelfInpector} from './utils/self-inspection/selfInspectionUtils';
+import ClientDevice from './devices/ClientDevice';
+import BaseDevice from './devices/BaseDevice';
+import {sideEffect} from './utils/sideEffect';
 
 type ClientInfo = {
   connection: FlipperClientConnection<any, any> | null | undefined;
@@ -43,6 +50,18 @@ type ClientCsrQuery = {
   csr?: string | undefined;
   csr_path?: string | undefined;
 };
+
+function transformCertificateExchangeMediumToType(
+  medium: number | undefined,
+): CertificateExchangeMedium {
+  if (medium == 1) {
+    return 'FS_ACCESS';
+  } else if (medium == 2) {
+    return 'WWW';
+  } else {
+    return 'FS_ACCESS';
+  }
+}
 
 declare interface Server {
   on(event: 'new-client', callback: (client: Client) => void): this;
@@ -70,7 +89,7 @@ class Server extends EventEmitter {
   logger: Logger;
   store: Store;
   initialisePromise: Promise<void> | null;
-
+  timeHandler: NodeJS.Timeout | undefined;
   constructor(logger: Logger, store: Store) {
     super();
     this.logger = logger;
@@ -81,9 +100,14 @@ class Server extends EventEmitter {
     this.insecureServer = null;
     this.initialisePromise = null;
     this.store = store;
+    this.timeHandler = undefined;
   }
 
   init() {
+    if (process.env.NODE_ENV === 'development') {
+      initSelfInpector(this.store, this.logger, this, this.connections);
+    }
+
     const {insecure, secure} = this.store.getState().application.serverPorts;
     this.initialisePromise = this.certificateProvider
       .loadSecureServerConfig()
@@ -133,7 +157,7 @@ class Server extends EventEmitter {
               'server',
             );
             server.emit('listening', port);
-            resolve(rsServer);
+            resolve(rsServer!);
           });
         return transportServer;
       };
@@ -202,7 +226,9 @@ class Server extends EventEmitter {
                 os: 'JSWebApp',
                 device: 'device',
                 device_id: deviceId,
-                sdk_version: 1,
+                // if plugins != null -> we are using old api, where we send the list of plugins with connect message
+                sdk_version: plugins == null ? 4 : 1,
+                medium: 'FS_ACCESS',
               },
               {},
             ).then((c) => (resolvedClient = c));
@@ -210,7 +236,8 @@ class Server extends EventEmitter {
 
             ws.on('message', (m: any) => {
               const parsed = JSON.parse(m.toString());
-              if (parsed.app === app) {
+              // non-null payload id means response to prev request, it's handled in connection
+              if (parsed.app === app && parsed.payload?.id == null) {
                 const message = JSON.stringify(parsed.payload);
                 if (resolvedClient) {
                   resolvedClient.onMessage(message);
@@ -254,14 +281,48 @@ class Server extends EventEmitter {
     if (!payload.data) {
       return {};
     }
-    const clientData: ClientQuery & ClientCsrQuery = JSON.parse(payload.data);
+    if (this.timeHandler) {
+      clearTimeout(this.timeHandler);
+    }
+    const clientData: ClientQuery &
+      ClientCsrQuery & {medium: number | undefined} = JSON.parse(payload.data);
+    this.logger.track('usage', 'trusted-request-handler-called', {
+      app: clientData.app,
+      os: clientData.os,
+      device: clientData.device,
+      device_id: clientData.device_id,
+      medium: clientData.medium,
+    });
     this.connectionTracker.logConnectionAttempt(clientData);
 
-    const {app, os, device, device_id, sdk_version, csr, csr_path} = clientData;
+    const {
+      app,
+      os,
+      device,
+      device_id,
+      sdk_version,
+      csr,
+      csr_path,
+      medium,
+    } = clientData;
+    const transformedMedium = transformCertificateExchangeMediumToType(medium);
+    if (transformedMedium === 'WWW') {
+      this.store.dispatch({
+        type: 'REGISTER_DEVICE',
+        payload: new ClientDevice(device_id, app, os),
+      });
+    }
 
     const client: Promise<Client> = this.addConnection(
       socket,
-      {app, os, device, device_id, sdk_version},
+      {
+        app,
+        os,
+        device,
+        device_id,
+        sdk_version,
+        medium: transformedMedium,
+      },
       {csr, csr_path},
     ).then((client) => {
       return (resolvedClient = client);
@@ -299,13 +360,15 @@ class Server extends EventEmitter {
   };
 
   _untrustedRequestHandler = (
-    socket: ReactiveSocket<string, any>,
+    _socket: ReactiveSocket<string, any>,
     payload: Payload<string, any>,
   ): Partial<Responder<string, any>> => {
     if (!payload.data) {
       return {};
     }
     const clientData: ClientQuery = JSON.parse(payload.data);
+    this.logger.track('usage', 'untrusted-request-handler-called', clientData);
+
     this.connectionTracker.logConnectionAttempt(clientData);
 
     const client: UninitializedClient = {
@@ -339,11 +402,13 @@ class Server extends EventEmitter {
           method: 'signCertificate';
           csr: string;
           destination: string;
+          medium: number | undefined; // OSS's older Client SDK might not send medium information. This is not an issue for internal FB users, as Flipper release is insync with client SDK through launcher.
         } = rawData;
+
         if (json.method === 'signCertificate') {
           console.debug('CSR received from device', 'server');
 
-          const {csr, destination} = json;
+          const {csr, destination, medium} = json;
           return new Single((subscriber) => {
             subscriber.onSubscribe(undefined);
             reportPlatformFailures(
@@ -351,6 +416,7 @@ class Server extends EventEmitter {
                 csr,
                 clientData.os,
                 destination,
+                transformCertificateExchangeMediumToType(medium),
               ),
               'processCertificateSigningRequest',
             )
@@ -361,6 +427,16 @@ class Server extends EventEmitter {
                   }),
                   metadata: '',
                 });
+
+                this.timeHandler = setTimeout(() => {
+                  // Fire notification
+                  this.emit('client-unresponsive-error', {
+                    client,
+                    medium: transformCertificateExchangeMediumToType(medium),
+                    deviceID: result.deviceId,
+                  });
+                }, 30 * 1000);
+
                 this.emit('finish-client-setup', {
                   client,
                   deviceId: result.deviceId,
@@ -388,6 +464,7 @@ class Server extends EventEmitter {
               method: 'signCertificate';
               csr: string;
               destination: string;
+              medium: number | undefined;
             }
           | undefined;
         try {
@@ -399,9 +476,14 @@ class Server extends EventEmitter {
 
         if (json && json.method === 'signCertificate') {
           console.debug('CSR received from device', 'server');
-          const {csr, destination} = json;
+          const {csr, destination, medium} = json;
           this.certificateProvider
-            .processCertificateSigningRequest(csr, clientData.os, destination)
+            .processCertificateSigningRequest(
+              csr,
+              clientData.os,
+              destination,
+              transformCertificateExchangeMediumToType(medium),
+            )
             .catch((e) => {
               console.error(e);
             });
@@ -430,7 +512,7 @@ class Server extends EventEmitter {
 
   async addConnection(
     conn: FlipperClientConnection<any, any>,
-    query: ClientQuery,
+    query: ClientQuery & {medium: CertificateExchangeMedium},
     csrQuery: ClientCsrQuery,
   ): Promise<Client> {
     invariant(query, 'expected query');
@@ -438,7 +520,8 @@ class Server extends EventEmitter {
     // try to get id by comparing giving `csr` to file from `csr_path`
     // otherwise, use given device_id
     const {csr_path, csr} = csrQuery;
-    return (csr_path && csr
+    // For iOS we do not need to confirm the device id, as it never changes unlike android.
+    return (csr_path && csr && query.os != 'iOS'
       ? this.certificateProvider.extractAppNameFromCSR(csr).then((appName) => {
           return this.certificateProvider.getTargetDeviceId(
             query.os,
@@ -448,7 +531,7 @@ class Server extends EventEmitter {
           );
         })
       : Promise.resolve(query.device_id)
-    ).then((csrId) => {
+    ).then(async (csrId) => {
       query.device_id = csrId;
       query.app = appNameWithUpdateHint(query);
 
@@ -460,7 +543,18 @@ class Server extends EventEmitter {
       });
       console.debug(`Device connected: ${id}`, 'server');
 
-      const client = new Client(id, query, conn, this.logger, this.store);
+      const device =
+        getDeviceBySerial(this.store.getState(), query.device_id) ??
+        (await findDeviceForConnection(this.store, query.app, query.device_id));
+      const client = new Client(
+        id,
+        query,
+        conn,
+        this.logger,
+        this.store,
+        undefined,
+        device,
+      );
 
       const info = {
         client,
@@ -507,7 +601,7 @@ class Server extends EventEmitter {
   removeConnection(id: string) {
     const info = this.connections.get(id);
     if (info) {
-      info.client.emit('close');
+      info.client.close();
       this.connections.delete(id);
       this.emit('clients-change');
       this.emit('removed-client', id);
@@ -544,6 +638,56 @@ class ConnectionTracker {
       );
     }
   }
+}
+
+function getDeviceBySerial(
+  state: State,
+  serial: string,
+): BaseDevice | undefined {
+  return state.connections.devices.find((device) => device.serial === serial);
+}
+
+async function findDeviceForConnection(
+  store: Store,
+  clientId: string,
+  serial: string,
+): Promise<BaseDevice> {
+  let lastSeenDeviceList: BaseDevice[] = [];
+  /* All clients should have a corresponding Device in the store.
+     However, clients can connect before a device is registered, so wait a
+     while for the device to be registered if it isn't already. */
+  return reportPlatformFailures(
+    new Promise<BaseDevice>((resolve, reject) => {
+      let unsubscribe: () => void = () => {};
+
+      const timeout = setTimeout(() => {
+        unsubscribe();
+        const error = `Timed out waiting for device ${serial} for client ${clientId}`;
+        console.error(error);
+        reject(error);
+      }, 15000);
+      unsubscribe = sideEffect(
+        store,
+        {name: 'waitForDevice', throttleMs: 100},
+        (state) => state.connections.devices,
+        (newDeviceList) => {
+          if (newDeviceList === lastSeenDeviceList) {
+            return;
+          }
+          lastSeenDeviceList = newDeviceList;
+          const matchingDevice = newDeviceList.find(
+            (device) => device.serial === serial,
+          );
+          if (matchingDevice) {
+            clearTimeout(timeout);
+            resolve(matchingDevice);
+            unsubscribe();
+          }
+        },
+      );
+    }),
+    'client-setMatchingDevice',
+  );
 }
 
 export default Server;

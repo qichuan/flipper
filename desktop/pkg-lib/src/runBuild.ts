@@ -15,10 +15,11 @@ import fs from 'fs-extra';
 let metroDir: string | undefined;
 const metroDirPromise = getMetroDir().then((dir) => (metroDir = dir));
 
+// We need to include metro-runtime to the watched folders list because it contains modules which are included into the final bundle.
 async function getMetroDir() {
   let dir = __dirname;
   while (true) {
-    const dirToCheck = path.join(dir, 'node_modules', 'metro');
+    const dirToCheck = path.join(dir, 'node_modules', 'metro-runtime');
     if (await fs.pathExists(dirToCheck)) return dirToCheck;
     const nextDir = path.dirname(dir);
     if (!nextDir || nextDir === '' || nextDir === dir) {
@@ -29,38 +30,13 @@ async function getMetroDir() {
   return __dirname;
 }
 
-function hash(string: string) {
-  let hash = 0;
-  if (string.length === 0) {
-    return hash;
-  }
-  let chr;
-  for (let i = 0; i < string.length; i++) {
-    chr = string.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0;
-  }
-  return hash;
-}
-const fileToIdMap = new Map();
-const createModuleIdFactory = () => (filePath: string) => {
-  if (filePath === '__prelude__') {
-    return 0;
-  }
-  let id = fileToIdMap.get(filePath);
-  if (typeof id !== 'number') {
-    id = hash(filePath);
-    fileToIdMap.set(filePath, id);
-  }
-  return id;
-};
-
 export default async function runBuild(
   inputDirectory: string,
   entry: string,
   out: string,
+  dev: boolean,
 ) {
-  const dev = process.env.NODE_ENV !== 'production';
+  const sourceMapUrl = null; // inline source map
   const baseConfig = await Metro.loadConfig();
   const config = Object.assign({}, baseConfig, {
     reporter: {update: () => {}},
@@ -71,8 +47,7 @@ export default async function runBuild(
     serializer: {
       ...baseConfig.serializer,
       getRunModuleStatement: (moduleID: string) =>
-        `module.exports = global.__r(${moduleID}).default;`,
-      createModuleIdFactory,
+        `module.exports = global.__r(${moduleID});`,
     },
     transformer: {
       ...baseConfig.transformer,
@@ -96,7 +71,8 @@ export default async function runBuild(
     dev,
     minify: !dev,
     resetCache: !dev,
-    sourceMap: true,
+    sourceMap: dev,
+    sourceMapUrl,
     entry,
     out,
   });

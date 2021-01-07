@@ -11,6 +11,7 @@ Object {
         "device": "MockAndroidDevice",
         "device_id": "serial",
         "os": "Android",
+        "sdk_version": 4,
       },
     },
   ],
@@ -24,7 +25,6 @@ Object {
       "title": "MockAndroidDevice",
     },
   ],
-  "errors": Array [],
   "selectedApp": "TestApp#Android#MockAndroidDevice#serial",
   "selectedDevice": Object {
     "deviceType": "physical",
@@ -49,6 +49,7 @@ Object {
 
 exports[`can create a Fake flipper 2`] = `
 Object {
+  "bundledPlugins": Map {},
   "clientPlugins": Map {
     "TestPlugin" => [Function],
   },
@@ -56,6 +57,8 @@ Object {
   "disabledPlugins": Array [],
   "failedPlugins": Array [],
   "gatekeepedPlugins": Array [],
+  "loadedPlugins": Map {},
+  "marketplacePlugins": Array [],
   "selectedPlugins": Array [],
 }
 `;

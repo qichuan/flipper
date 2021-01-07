@@ -20,11 +20,75 @@ import {
   genMercurialRevision,
   generatePluginEntryPoints,
 } from './build-utils';
-import fetch from 'node-fetch';
+import fetch from '@adobe/node-fetch-retry';
 import {getIcons, buildLocalIconPath, getIconURL} from '../app/src/utils/icons';
 import isFB from './isFB';
 import copyPackageWithDependencies from './copy-package-with-dependencies';
 import {staticDir, distDir} from './paths';
+import yargs from 'yargs';
+
+const argv = yargs
+  .usage('yarn build [args]')
+  .version(false)
+  .options({
+    mac: {
+      type: 'boolean',
+      group: 'targets',
+    },
+    'mac-dmg': {
+      type: 'boolean',
+      group: 'targets',
+    },
+    win: {
+      type: 'boolean',
+      group: 'targets',
+    },
+    linux: {
+      type: 'boolean',
+      group: 'targets',
+    },
+    'linux-deb': {
+      type: 'boolean',
+      group: 'targets',
+    },
+    'linux-snap': {
+      type: 'boolean',
+      group: 'targets',
+    },
+    version: {
+      description:
+        'Unique build identifier to be used as the version patch part for the build',
+      type: 'number',
+      default: 0,
+    },
+    channel: {
+      description: 'Release channel for the build',
+      choices: ['stable', 'insiders'],
+      default: 'stable',
+    },
+  })
+  .help()
+  .strict()
+  .check((argv) => {
+    const targetSpecified =
+      argv.mac ||
+      argv['mac-dmg'] ||
+      argv.win ||
+      argv.linux ||
+      argv['linux-deb'] ||
+      argv['linux-snap'];
+    if (!targetSpecified) {
+      throw new Error('No targets specified. eg. --mac, --win, or --linux');
+    }
+    return true;
+  })
+  .parse(process.argv.slice(1));
+
+if (isFB) {
+  process.env.FLIPPER_FB = 'true';
+}
+
+process.env.FLIPPER_RELEASE_CHANNEL = argv.channel;
 
 async function generateManifest(versionNumber: string) {
   await fs.writeFile(
@@ -40,6 +104,7 @@ async function modifyPackageManifest(
   buildFolder: string,
   versionNumber: string,
   hgRevision: string | null,
+  channel: string,
 ) {
   // eslint-disable-next-line no-console
   console.log('Creating package.json manifest');
@@ -55,6 +120,7 @@ async function modifyPackageManifest(
   if (hgRevision != null) {
     manifest.revision = hgRevision;
   }
+  manifest.releaseChannel = channel;
   await fs.writeFile(
     path.join(buildFolder, 'package.json'),
     JSON.stringify(manifest, null, '  '),
@@ -65,10 +131,10 @@ async function buildDist(buildFolder: string) {
   const targetsRaw: Map<Platform, Map<Arch, string[]>>[] = [];
   const postBuildCallbacks: (() => void)[] = [];
 
-  if (process.argv.indexOf('--mac') > -1) {
+  if (argv.mac || argv['mac-dmg']) {
     targetsRaw.push(Platform.MAC.createTarget(['dir']));
     // You can build mac apps on Linux but can't build dmgs, so we separate those.
-    if (process.argv.indexOf('--mac-dmg') > -1) {
+    if (argv['mac-dmg']) {
       targetsRaw.push(Platform.MAC.createTarget(['dmg']));
     }
     postBuildCallbacks.push(() =>
@@ -78,22 +144,22 @@ async function buildDist(buildFolder: string) {
       }),
     );
   }
-  if (process.argv.indexOf('--linux') > -1) {
+  if (argv.linux || argv['linux-deb'] || argv['linux-snap']) {
     targetsRaw.push(Platform.LINUX.createTarget(['zip']));
 
-    const argv = process.argv.slice(2);
-    if (argv.indexOf('--linux-deb') > -1) {
+    if (argv['linux-deb']) {
       // linux targets can be:
       // AppImage, snap, deb, rpm, freebsd, pacman, p5p, apk, 7z, zip, tar.xz, tar.lz, tar.gz, tar.bz2, dir
       targetsRaw.push(Platform.LINUX.createTarget(['deb']));
     }
-    if (argv.indexOf('--linux-snap') > -1) {
+    if (argv['linux-snap']) {
       targetsRaw.push(Platform.LINUX.createTarget(['snap']));
     }
   }
-  if (process.argv.indexOf('--win') > -1) {
+  if (argv.win) {
     targetsRaw.push(Platform.WINDOWS.createTarget(['zip']));
   }
+
   if (!targetsRaw.length) {
     throw new Error('No targets specified. eg. --mac, --win, or --linux');
   }
@@ -163,7 +229,7 @@ function downloadIcons(buildFolder: string) {
   return Promise.all(
     iconURLs.map(({name, size, density}) => {
       const url = getIconURL(name, size, density);
-      return fetch(url)
+      return fetch(url, {})
         .then((res) => {
           if (res.status !== 200) {
             throw new Error(
@@ -191,21 +257,18 @@ function downloadIcons(buildFolder: string) {
 }
 
 (async () => {
-  if (isFB) {
-    process.env.FLIPPER_FB = 'true';
-  }
   const dir = await buildFolder();
   // eslint-disable-next-line no-console
   console.log('Created build directory', dir);
 
   await compileMain();
-  await generatePluginEntryPoints();
+  await generatePluginEntryPoints(argv.channel === 'insiders');
   await copyStaticFolder(dir);
   await downloadIcons(dir);
   await compileRenderer(dir);
-  const versionNumber = getVersionNumber();
+  const versionNumber = getVersionNumber(argv.version);
   const hgRevision = await genMercurialRevision();
-  await modifyPackageManifest(dir, versionNumber, hgRevision);
+  await modifyPackageManifest(dir, versionNumber, hgRevision, argv.channel);
   await fs.ensureDir(distDir);
   await generateManifest(versionNumber);
   await buildDist(dir);

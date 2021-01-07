@@ -10,17 +10,27 @@
 import child_process from 'child_process';
 import {promisify} from 'util';
 import {Mutex} from 'async-mutex';
-import {notNull} from './typeUtils';
 const unsafeExec = promisify(child_process.exec);
 import {killOrphanedInstrumentsProcesses} from './processCleanup';
 import {reportPlatformFailures} from './metrics';
 import {promises, constants} from 'fs';
+import memoize from 'lodash.memoize';
+import {notNull} from './typeUtils';
 
 // Use debug to get helpful logs when idb fails
 const idbLogLevel = 'DEBUG';
 const operationPrefix = 'iosContainerUtility';
 
 const mutex = new Mutex();
+
+type IdbTarget = {
+  name: string;
+  udid: string;
+  state: string;
+  type: string;
+  os_version: string;
+  architecture: string;
+};
 
 export type DeviceTarget = {
   udid: string;
@@ -44,23 +54,45 @@ function safeExec(command: string): Promise<{stdout: string; stderr: string}> {
   });
 }
 
-async function targets(): Promise<Array<DeviceTarget>> {
+async function targets(idbPath: string): Promise<Array<DeviceTarget>> {
   if (process.platform !== 'darwin') {
     return [];
   }
-  await killOrphanedInstrumentsProcesses();
-  return safeExec('instruments -s devices').then(({stdout}) =>
-    stdout
-      .toString()
-      .split('\n')
-      .map((line) => line.trim())
-      .map((line) => /(.+) \([^(]+\) \[(.*)\]( \(Simulator\))?/.exec(line))
-      .filter(notNull)
-      .filter(([_match, _name, _udid, isSim]) => !isSim)
-      .map(([_match, name, udid]) => {
-        return {udid: udid, type: 'physical', name: name};
-      }),
-  );
+
+  // Not all users have idb installed because you can still use
+  // Flipper with Simulators without it.
+  // But idb is MUCH more CPU efficient than instruments, so
+  // when installed, use it.
+  if (await memoize(isAvailable)(idbPath)) {
+    return safeExec(`${idbPath} list-targets --json`).then(({stdout}) =>
+      stdout
+        .toString()
+        .trim()
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .filter(({type}: IdbTarget) => type !== 'simulator')
+        .map((target: IdbTarget) => {
+          return {udid: target.udid, type: 'physical', name: target.name};
+        }),
+    );
+  } else {
+    await killOrphanedInstrumentsProcesses();
+    return safeExec('instruments -s devices').then(({stdout}) =>
+      stdout
+        .toString()
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => /(.+) \([^(]+\) \[(.*)\]( \(Simulator\))?/.exec(line))
+        .filter(notNull)
+        .filter(([_match, _name, _udid, isSim]) => !isSim)
+        .map(([_match, name, udid]) => {
+          return {udid: udid, type: 'physical', name: name};
+        }),
+    );
+  }
 }
 
 async function push(
@@ -70,7 +102,7 @@ async function push(
   dst: string,
   idbPath: string,
 ): Promise<void> {
-  await checkIdbIsInstalled(idbPath);
+  await memoize(checkIdbIsInstalled)(idbPath);
   return wrapWithErrorMessage(
     reportPlatformFailures(
       safeExec(
@@ -92,7 +124,7 @@ async function pull(
   dst: string,
   idbPath: string,
 ): Promise<void> {
-  await checkIdbIsInstalled(idbPath);
+  await memoize(checkIdbIsInstalled)(idbPath);
   return wrapWithErrorMessage(
     reportPlatformFailures(
       safeExec(
@@ -107,7 +139,7 @@ async function pull(
   );
 }
 
-async function checkIdbIsInstalled(idbPath: string): Promise<void> {
+export async function checkIdbIsInstalled(idbPath: string): Promise<void> {
   const isInstalled = await isAvailable(idbPath);
   if (!isInstalled) {
     throw new Error(

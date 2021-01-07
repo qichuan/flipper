@@ -7,15 +7,16 @@
  * @format
  */
 
-import {FlexColumn, styled, FlexRow, ToggleButton} from 'flipper';
+import {FlexColumn, styled, FlexRow, ToggleButton} from '../../ui';
 import React from 'react';
+import {theme} from 'flipper-plugin';
 
 const IndentedSection = styled(FlexColumn)({
   paddingLeft: 50,
   paddingBottom: 10,
 });
 const GreyedOutOverlay = styled.div({
-  backgroundColor: '#EFEEEF',
+  background: theme.backgroundDefault,
   borderRadius: 4,
   opacity: 0.6,
   height: '100%',

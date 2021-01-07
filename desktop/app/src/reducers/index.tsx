@@ -52,6 +52,10 @@ import healthchecks, {
   Action as HealthcheckAction,
   State as HealthcheckState,
 } from './healthchecks';
+import pluginDownloads, {
+  State as PluginDownloadsState,
+  Action as PluginDownloadsAction,
+} from './pluginDownloads';
 import usageTracking, {
   Action as TrackingAction,
   State as TrackingState,
@@ -63,11 +67,12 @@ import {launcherConfigDir} from '../utils/launcher';
 import os from 'os';
 import {resolve} from 'path';
 import xdg from 'xdg-basedir';
-import {persistReducer} from 'redux-persist';
+import {createTransform, persistReducer} from 'redux-persist';
 import {PersistPartial} from 'redux-persist/es/persistReducer';
 
 import {Store as ReduxStore, MiddlewareAPI as ReduxMiddlewareAPI} from 'redux';
 import storage from 'redux-persist/lib/storage';
+import {TransformConfig} from 'redux-persist/es/createTransform';
 
 export type Actions =
   | ApplicationAction
@@ -83,6 +88,7 @@ export type Actions =
   | PluginManagerAction
   | HealthcheckAction
   | TrackingAction
+  | PluginDownloadsAction
   | {type: 'INIT'};
 
 export type State = {
@@ -91,14 +97,15 @@ export type State = {
   pluginStates: PluginStatesState;
   pluginMessageQueue: PluginMessageQueueState;
   notifications: NotificationsState & PersistPartial;
-  plugins: PluginsState;
+  plugins: PluginsState & PersistPartial;
   user: UserState & PersistPartial;
   settingsState: SettingsState & PersistPartial;
   launcherSettingsState: LauncherSettingsState & PersistPartial;
   supportForm: SupportFormState;
-  pluginManager: PluginManagerState;
+  pluginManager: PluginManagerState & PersistPartial;
   healthchecks: HealthcheckState & PersistPartial;
   usageTracking: TrackingState;
+  pluginDownloads: PluginDownloadsState;
 };
 
 export type Store = ReduxStore<State, Actions>;
@@ -111,6 +118,13 @@ const settingsStorage = new JsonFileStorage(
     'settings.json',
   ),
 );
+
+const setTransformer = (config: TransformConfig) =>
+  createTransform(
+    (set: Set<string>) => Array.from(set),
+    (arrayString: string[]) => new Set(arrayString),
+    config,
+  );
 
 const launcherSettingsStorage = new LauncherSettingsStorage(
   resolve(launcherConfigDir(), 'flipper-launcher.toml'),
@@ -141,9 +155,24 @@ export default combineReducers<State, Actions>({
     },
     notifications,
   ),
-  plugins,
+  plugins: persistReducer<PluginsState, Actions>(
+    {
+      key: 'plugins',
+      storage,
+      whitelist: ['marketplacePlugins'],
+    },
+    plugins,
+  ),
   supportForm,
-  pluginManager,
+  pluginManager: persistReducer<PluginManagerState, Actions>(
+    {
+      key: 'pluginManager',
+      storage,
+      whitelist: ['uninstalledPlugins'],
+      transforms: [setTransformer({whitelist: ['uninstalledPlugins']})],
+    },
+    pluginManager,
+  ),
   user: persistReducer(
     {
       key: 'user',
@@ -174,4 +203,5 @@ export default combineReducers<State, Actions>({
     healthchecks,
   ),
   usageTracking,
+  pluginDownloads,
 });

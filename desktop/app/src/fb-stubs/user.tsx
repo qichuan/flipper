@@ -7,6 +7,7 @@
  * @format
  */
 
+import {Atom, createState} from 'flipper-plugin';
 import {User} from '../reducers/user';
 
 export async function getUser(): Promise<User> {
@@ -82,4 +83,14 @@ export async function getFlipperMediaCDN(
 
 export async function getPreferredEditorUriScheme(): Promise<string> {
   return 'vscode';
+}
+
+export async function appendAccessTokenToUrl(_url: URL): Promise<string> {
+  throw new Error('Implement appendAccessTokenToUrl');
+}
+
+const isLoggedInAtom = createState(false);
+
+export function isLoggedIn(): Atom<boolean> {
+  return isLoggedInAtom;
 }

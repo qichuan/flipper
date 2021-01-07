@@ -27,12 +27,11 @@ import {
   styled,
   Text,
   LoadingIndicator,
-  getPluginKey,
-} from 'flipper';
+} from '../ui';
 import {connect} from 'react-redux';
 import RatingButton from './RatingButton';
 import DevicesButton from './DevicesButton';
-import LocationsButton from './LocationsButton';
+import {LocationsButton} from './LocationsButton';
 import ScreenCaptureButtons from './ScreenCaptureButtons';
 import AutoUpdateVersion from './AutoUpdateVersion';
 import UpdateIndicator from './UpdateIndicator';
@@ -46,8 +45,10 @@ import {reportUsage} from '../utils/metrics';
 import FpsGraph from './FpsGraph';
 import NetworkGraph from './NetworkGraph';
 import MetroButton from './MetroButton';
+import {navPluginStateSelector} from './LocationsButton';
 
 const AppTitleBar = styled(FlexRow)<{focused?: boolean}>(({focused}) => ({
+  userSelect: 'none',
   background: focused
     ? `linear-gradient(to bottom, ${colors.macOSTitleBarBackgroundTop} 0%, ${colors.macOSTitleBarBackgroundBottom} 100%)`
     : colors.macOSTitleBarBackgroundBlur,
@@ -84,7 +85,6 @@ type StateFromProps = {
   launcherMsg: LauncherMsg;
   share: ShareType | null | undefined;
   navPluginIsActive: boolean;
-  isMetroActive: boolean;
 };
 
 const VersionText = styled(Text)({
@@ -100,7 +100,10 @@ const VersionText = styled(Text)({
   },
 });
 
-class Version extends React.Component<{children: string}, {copied: boolean}> {
+export class Version extends React.Component<
+  {children: string},
+  {copied: boolean}
+> {
   state = {
     copied: false,
   };
@@ -146,7 +149,7 @@ function statusMessageComponent(
 type Props = OwnProps & DispatchFromProps & StateFromProps;
 class TitleBar extends React.Component<Props, StateFromProps> {
   render() {
-    const {navPluginIsActive, share, isMetroActive} = this.props;
+    const {navPluginIsActive, share} = this.props;
     return (
       <AppTitleBar focused={this.props.windowIsFocused} className="toolbar">
         {navPluginIsActive ? (
@@ -158,7 +161,7 @@ class TitleBar extends React.Component<Props, StateFromProps> {
           <DevicesButton />
         )}
 
-        {isMetroActive ? <MetroButton /> : null}
+        <MetroButton />
 
         <ScreenCaptureButtons />
         {statusMessageComponent(
@@ -225,28 +228,19 @@ class TitleBar extends React.Component<Props, StateFromProps> {
 }
 
 export default connect<StateFromProps, DispatchFromProps, OwnProps, State>(
-  ({
-    application: {
-      windowIsFocused,
-      leftSidebarVisible,
-      rightSidebarVisible,
-      rightSidebarAvailable,
-      downloadingImportData,
-      launcherMsg,
-      share,
-    },
-    connections: {selectedDevice, selectedApp, devices},
-    pluginStates,
-  }) => {
-    const navigationPluginKey = getPluginKey(
-      selectedApp,
-      selectedDevice,
-      'Navigation',
-    );
-    const navPluginIsActive = !!pluginStates[navigationPluginKey];
-    const isMetroActive = !!devices.find(
-      (device) => device.os === 'Metro' && !device.isArchived,
-    );
+  (state) => {
+    const {
+      application: {
+        windowIsFocused,
+        leftSidebarVisible,
+        rightSidebarVisible,
+        rightSidebarAvailable,
+        downloadingImportData,
+        launcherMsg,
+        share,
+      },
+    } = state;
+    const navPluginIsActive = !!navPluginStateSelector(state);
 
     return {
       windowIsFocused,
@@ -257,7 +251,6 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, State>(
       launcherMsg,
       share,
       navPluginIsActive,
-      isMetroActive,
     };
   },
   {

@@ -19,15 +19,11 @@ import {
   colors,
   Glyph,
   styled,
-  GK,
-  FlipperPlugin,
-  FlipperDevicePlugin,
-  ArchivedDevice,
   SmallText,
   Info,
   HBox,
   LoadingIndicator,
-} from 'flipper';
+} from '../../ui';
 import React, {
   PureComponent,
   Fragment,
@@ -60,11 +56,15 @@ import {
   NoDevices,
   getColorByApp,
   getFavoritePlugins,
+  isStaticViewActive,
 } from './sidebarUtils';
 import {useLocalStorage} from '../../utils/useLocalStorage';
+import {PluginDefinition, ClientPluginMap, DevicePluginMap} from '../../plugin';
+import GK from '../../fb-stubs/GK';
+import ArchivedDevice from '../../devices/ArchivedDevice';
 
-type FlipperPlugins = typeof FlipperPlugin[];
-type PluginsByCategory = [string, FlipperPlugins][];
+type FlipperPlugins = PluginDefinition[];
+type PluginsByCategoryType = [string, FlipperPlugins][];
 
 type SectionLevel = 1 | 2 | 3;
 
@@ -102,6 +102,7 @@ const SidebarSectionBody = styled('div')<{
   level: SectionLevel;
   collapsed: boolean;
 }>(({collapsed, level}) => ({
+  userSelect: 'none',
   flexShrink: 0,
   overflow: 'hidden',
   maxHeight: collapsed ? 0 : 2000, // might need increase if too many plugins...
@@ -184,14 +185,14 @@ type StateFromProps = {
     deviceId?: string;
     errorMessage?: string;
   }>;
-  devicePlugins: Map<string, typeof FlipperDevicePlugin>;
-  clientPlugins: Map<string, typeof FlipperPlugin>;
+  devicePlugins: DevicePluginMap;
+  clientPlugins: ClientPluginMap;
 };
 
 type SelectPlugin = (payload: {
   selectedPlugin: string | null;
   selectedApp?: string | null;
-  deepLinkPayload: string | null;
+  deepLinkPayload: unknown;
   selectedDevice: BaseDevice;
 }) => void;
 
@@ -242,9 +243,10 @@ class MainSidebar2 extends PureComponent<Props, State> {
       selectedDevice,
     } = this.props;
     const clients = getAvailableClients(device, this.props.clients);
-    const devicePluginsItems = device.devicePlugins.map((pluginName) => {
-      const plugin = this.props.devicePlugins.get(pluginName)!;
-      return (
+    const devicePluginsItems = device.devicePlugins
+      .map((pluginName) => this.props.devicePlugins.get(pluginName)!)
+      .sort(sortPluginsByName)
+      .map((plugin) => (
         <PluginSidebarListItem
           key={plugin.id}
           isActive={plugin.id === selectedPlugin && selectedDevice === device}
@@ -258,8 +260,7 @@ class MainSidebar2 extends PureComponent<Props, State> {
           }
           plugin={plugin}
         />
-      );
-    });
+      ));
     const wrapDevicePlugins =
       clients.length > 0 && device.devicePlugins.length > 1 && !device.source;
 
@@ -391,17 +392,12 @@ class MainSidebar2 extends PureComponent<Props, State> {
   }
 }
 
-function isStaticViewActive(
-  current: StaticView,
-  selected: StaticView,
-): boolean {
-  return current && selected && current === selected;
-}
-
-function groupPluginsByCategory(plugins: FlipperPlugins): PluginsByCategory {
+function groupPluginsByCategory(
+  plugins: FlipperPlugins,
+): PluginsByCategoryType {
   const sortedPlugins = plugins.slice().sort(sortPluginsByName);
   const byCategory: {[cat: string]: FlipperPlugins} = {};
-  const res: PluginsByCategory = [];
+  const res: PluginsByCategoryType = [];
   sortedPlugins.forEach((plugin) => {
     const category = plugin.category || '';
     (byCategory[category] || (byCategory[category] = [])).push(plugin);
@@ -428,13 +424,13 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
       uninitializedClients,
       staticView,
     },
-    notifications: {activeNotifications, blacklistedPlugins},
+    notifications: {activeNotifications, blocklistedPlugins},
     plugins: {devicePlugins, clientPlugins},
   }) => ({
     numNotifications: (() => {
-      const blacklist = new Set(blacklistedPlugins);
+      const blocklist = new Set(blocklistedPlugins);
       return activeNotifications.filter(
-        (n: PluginNotification) => !blacklist.has(n.pluginId),
+        (n: PluginNotification) => !blocklist.has(n.pluginId),
       ).length;
     })(),
     windowIsFocused,
@@ -469,7 +465,7 @@ const PluginList = memo(function PluginList({
 }: {
   client: Client;
   device: BaseDevice;
-  clientPlugins: Map<string, typeof FlipperPlugin>;
+  clientPlugins: ClientPluginMap;
   starPlugin: typeof starPluginAction;
   userStarredPlugins: Store['connections']['userStarredPlugins'];
   selectedPlugin?: null | string;
@@ -477,7 +473,7 @@ const PluginList = memo(function PluginList({
   selectedApp?: null | string;
 }) {
   // client is a mutable structure, so we need the event emitter to detect the addition of plugins....
-  const [_, setPluginsChanged] = useState(0);
+  const [, setPluginsChanged] = useState(0);
   useEffect(() => {
     const listener = () => setPluginsChanged((v) => v + 1);
     client.on('plugins-change', listener);
@@ -487,17 +483,17 @@ const PluginList = memo(function PluginList({
   }, [client]);
 
   const onFavorite = useCallback(
-    (plugin: string) => {
+    (plugin: PluginDefinition) => {
       starPlugin({
         selectedApp: client.query.app,
-        selectedPlugin: plugin,
+        plugin,
       });
     },
-    [client],
+    [client, starPlugin],
   );
 
   const allPlugins = Array.from(clientPlugins.values()).filter(
-    (p: typeof FlipperPlugin) => client.plugins.indexOf(p.id) > -1,
+    (p) => client.plugins.indexOf(p.id) > -1,
   );
   const favoritePlugins: FlipperPlugins = getFavoritePlugins(
     device,
@@ -590,7 +586,7 @@ const PluginsByCategory = memo(function PluginsByCategory({
   starred: boolean;
   selectedPlugin?: null | string;
   selectedApp?: null | string;
-  onFavorite: (pluginId: string) => void;
+  onFavorite: (plugin: PluginDefinition) => void;
   selectPlugin: SelectPlugin;
 }) {
   return (
@@ -618,7 +614,7 @@ const PluginsByCategory = memo(function PluginsByCategory({
               }
               plugin={plugin}
               app={client.query.app}
-              onFavorite={() => onFavorite(plugin.id)}
+              onFavorite={() => onFavorite(plugin)}
               starred={device.isArchived ? undefined : starred}
             />
           ))}

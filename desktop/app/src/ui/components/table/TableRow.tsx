@@ -20,12 +20,7 @@ import FlexRow from '../FlexRow';
 import {colors} from '../colors';
 import {normaliseColumnWidth} from './utils';
 import {DEFAULT_ROW_HEIGHT} from './types';
-import {
-  FontWeightProperty,
-  ColorProperty,
-  JustifyContentProperty,
-  BackgroundColorProperty,
-} from 'csstype';
+import {Property} from 'csstype';
 
 type TableBodyRowContainerProps = {
   even?: boolean;
@@ -33,11 +28,12 @@ type TableBodyRowContainerProps = {
   highlighted?: boolean;
   rowLineHeight?: number;
   multiline?: boolean;
-  fontWeight?: FontWeightProperty;
-  color?: ColorProperty;
+  fontWeight?: Property.FontWeight;
+  color?: Property.Color;
   highlightOnHover?: boolean;
-  backgroundColor?: BackgroundColorProperty;
-  highlightedBackgroundColor?: BackgroundColorProperty;
+  backgroundColor?: Property.BackgroundColor;
+  highlightedBackgroundColor?: Property.BackgroundColor;
+  zebraBackgroundColor?: Property.BackgroundColor;
 };
 
 const backgroundColor = (props: TableBodyRowContainerProps) => {
@@ -48,7 +44,9 @@ const backgroundColor = (props: TableBodyRowContainerProps) => {
       return colors.macOSTitleBarIconSelected;
     }
   } else {
-    if (props.backgroundColor) {
+    if (props.zebra && props.zebraBackgroundColor && props.backgroundColor) {
+      return props.even ? props.zebraBackgroundColor : props.backgroundColor;
+    } else if (props.backgroundColor) {
       return props.backgroundColor;
     } else if (props.even && props.zebra) {
       return colors.light02;
@@ -76,7 +74,6 @@ const TableBodyRowContainer = styled(FlexRow)<TableBodyRowContainerProps>(
     fontWeight: props.fontWeight,
     overflow: 'hidden',
     width: '100%',
-    userSelect: 'none',
     flexShrink: 0,
     '&:hover': {
       backgroundColor:
@@ -89,27 +86,20 @@ TableBodyRowContainer.displayName = 'TableRow:TableBodyRowContainer';
 const TableBodyColumnContainer = styled.div<{
   width?: any;
   multiline?: boolean;
-  justifyContent: JustifyContentProperty;
-}>(
-  (props: {
-    width?: any;
-    multiline?: boolean;
-    justifyContent: JustifyContentProperty;
-  }) => ({
-    display: 'flex',
-    flexShrink: props.width === 'flex' ? 1 : 0,
-    overflow: 'hidden',
-    padding: '0 8px',
-    userSelect: 'none',
-    textOverflow: 'ellipsis',
-    verticalAlign: 'top',
-    whiteSpace: props.multiline ? 'normal' : 'nowrap',
-    wordWrap: props.multiline ? 'break-word' : 'normal',
-    width: props.width === 'flex' ? '100%' : props.width,
-    maxWidth: '100%',
-    justifyContent: props.justifyContent,
-  }),
-);
+  justifyContent: Property.JustifyContent;
+}>((props) => ({
+  display: 'flex',
+  flexShrink: props.width === 'flex' ? 1 : 0,
+  overflow: 'hidden',
+  padding: '0 8px',
+  textOverflow: 'ellipsis',
+  verticalAlign: 'top',
+  whiteSpace: props.multiline ? 'normal' : 'nowrap',
+  wordWrap: props.multiline ? 'break-word' : 'normal',
+  width: props.width === 'flex' ? '100%' : props.width,
+  maxWidth: '100%',
+  justifyContent: props.justifyContent,
+}));
 TableBodyColumnContainer.displayName = 'TableRow:TableBodyColumnContainer';
 
 type Props = {
@@ -163,6 +153,7 @@ export default class TableRow extends React.PureComponent<Props> {
         rowLineHeight={rowLineHeight}
         highlightedBackgroundColor={row.highlightedBackgroundColor}
         backgroundColor={row.backgroundColor}
+        zebraBackgroundColor={row.zebraBackgroundColor}
         highlighted={highlighted}
         multiline={multiline}
         even={index % 2 === 0}

@@ -12,6 +12,7 @@ import fs from 'fs';
 import {Store, State} from '../reducers';
 import {getPluginKey} from './pluginUtils';
 import {serialize} from './serialization';
+import {isSandyPlugin} from '../plugin';
 
 let pluginRecordingState: {
   recording: string;
@@ -29,6 +30,10 @@ function initialRecordingState(): typeof pluginRecordingState {
     endState: undefined,
     pluginName: '',
   };
+}
+
+export function isRecordingEvents(pluginKey: string) {
+  return pluginRecordingState.recording === pluginKey;
 }
 
 export function flipperRecorderAddEvent(
@@ -67,7 +72,8 @@ async function flipperStartPluginRecording(state: State) {
   // Note that we don't use the plugin's own serializeState, as that might interact with the
   // device state, and is used for creating Flipper Exports.
   pluginRecordingState.startState = await serialize(
-    state.pluginStates[pluginKey] || plugin.defaultPersistedState,
+    state.pluginStates[pluginKey] ||
+      (isSandyPlugin(plugin) ? {} : plugin.defaultPersistedState),
   );
 
   console.log(
@@ -169,7 +175,7 @@ function generateTestSuite(pluginName: string, snapShotFileName: string) {
 
 import fs from 'fs';
 import path from 'path';
-import {deserialize} from 'flipper';
+import {deserialize} from '../ui';
 import Plugin from '../';
 
 test('Verify events produce a consistent end state for plugin ${pluginName}', async () => {

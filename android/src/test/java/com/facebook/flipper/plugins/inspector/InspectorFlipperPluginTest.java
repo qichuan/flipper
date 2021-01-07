@@ -12,6 +12,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.robolectric.annotation.LooperMode.Mode.LEGACY;
 
 import android.app.Application;
 import android.graphics.Rect;
@@ -22,7 +23,6 @@ import com.facebook.flipper.core.FlipperArray;
 import com.facebook.flipper.core.FlipperConnection;
 import com.facebook.flipper.core.FlipperDynamic;
 import com.facebook.flipper.core.FlipperObject;
-import com.facebook.flipper.plugins.inspector.InspectorFlipperPlugin.TouchOverlayView;
 import com.facebook.flipper.plugins.inspector.descriptors.ApplicationDescriptor;
 import com.facebook.flipper.testing.FlipperConnectionMock;
 import com.facebook.flipper.testing.FlipperResponderMock;
@@ -38,7 +38,9 @@ import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.LooperMode;
 
+@LooperMode(LEGACY)
 @RunWith(RobolectricTestRunner.class)
 public class InspectorFlipperPluginTest {
 
@@ -242,7 +244,6 @@ public class InspectorFlipperPluginTest {
     final InspectorFlipperPlugin plugin =
         new InspectorFlipperPlugin(mApp, mDescriptorMapping, null);
     final FlipperConnectionMock connection = new FlipperConnectionMock();
-    plugin.onConnect(connection);
 
     final TestNode one = new TestNode();
     one.id = "1";
@@ -263,7 +264,20 @@ public class InspectorFlipperPluginTest {
     root.children.add(three);
     mApplicationDescriptor.root = root;
 
-    plugin.hitTest(10, 10);
+    TouchOverlayView view =
+        new TouchOverlayView(mApp.getApplication(), connection, mApp) {
+          @Override
+          protected String trackObject(Object obj) throws Exception {
+            return plugin.trackObject(obj);
+          }
+
+          @Override
+          protected NodeDescriptor<Object> descriptorForObject(Object obj) {
+            return plugin.descriptorForObject(obj);
+          }
+        };
+
+    view.hitTest(10, 10);
 
     assertThat(
         connection.sent.get("select"),
@@ -383,7 +397,12 @@ public class InspectorFlipperPluginTest {
     }
 
     @Override
-    public void setValue(TestNode node, String[] path, FlipperDynamic value) throws Exception {
+    public void setValue(
+        TestNode node,
+        String[] path,
+        @Nullable SetDataOperations.FlipperValueHint kind,
+        FlipperDynamic value)
+        throws Exception {
       if (path[0].equals("data")) {
         node.data = value.asObject();
       }

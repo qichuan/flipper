@@ -5,7 +5,19 @@ sidebar_label: Troubleshooting Issues
 ---
 import useBaseUrl from '@docusaurus/useBaseUrl';
 
+import InternalTroubleshooting from './fb/internal-troubleshooting.mdx';
+
+import {FbInternalOnly, OssOnly} from 'internaldocs-fb-helpers';
+
 We hope that flipper works well out of the box, but the software is a work in progress and problems will occur. Below are some known issues and steps you can take to try to resolve them.
+
+<FbInternalOnly>
+
+## General Issues
+
+<InternalTroubleshooting />
+
+</FbInternalOnly>
 
 ## Mac Desktop app
 
@@ -32,6 +44,8 @@ We hope that flipper works well out of the box, but the software is a work in pr
 * Make sure the time and date are set correctly on your mobile device and desktop computer.
 * If no app plugins are showing up, there may be a connectivity issue between Flipper and your app. Check [connection issues](#connection-issues) to see if anything is failing.
 
+<OssOnly>
+
 ### Connection Issues
 The Flipper SDK includes an in-app connection diagnostics screen to help you diagnose problems.
 
@@ -41,10 +55,12 @@ On a terminal, run the following:
 ```bash
 adb shell am start -n <APP_PACKAGE>/com.facebook.flipper.android.diagnostics.FlipperDiagnosticActivity
 ```
-This will only work if you added `FlipperDiagnosticActivity` to your `AndroidManifest.xml`. See [getting started](getting-started/index) for help.
+This will only work if you added `FlipperDiagnosticActivity` to your `AndroidManifest.xml`. See [getting started](./getting-started/android-native.mdx#diagnostics) for help.
 
 #### iOS
 You'll need to manually add this [ViewController](https://github.com/facebook/flipper/blob/master/iOS/FlipperKit/FlipperDiagnosticsViewController.m) to your app to see the in-app diagnostics.
+
+</OssOnly>
 
 ### Known Incompatibilities
 The following devices are known to be incompatible or face issues with flipper:
@@ -89,6 +105,8 @@ debugImplementation('com.facebook.flipper:flipper:*') {
 ```
 
 ## React Native
+
+Make sure the project is using the [latest Flipper SDK](getting-started/react-native#using-the-latest-flipper-sdk). 
 
 When using Flipper with React Native, two devices should show up:
 
@@ -139,6 +157,18 @@ That is correct, the dependencies won't be actually included in the release (whe
 1. Make sure the React Native app is _not_ in debug mode already (trigger dev menu, and make sure that `Remote JS Debugging` is _not_ enabled).
 
 #### iOS Build errors in React Native
+
+#### `YogaKit.modulemap` not found
+
+1. Make sure you are opening the `.xcodeworkspace` dir when building from XCode, _not_ the project file. Pods based projects should always be opened this way.
+1. Make sure you did run `cd ios && pod install`.
+1. Restarting your machine seems to magically fix the issue for quite some people. This might especially be needed after doing an XCode upgrade.
+1. Make sure that the simulators are spawned by your current Xcode version. Force quite all simulators, run `sudo xcode-select --switch /Applications/Xcode.app` (update path were necessary), and start simulators & Flipper again.
+1. Make sure the iOS build target version aligns with the podfile and target iOS 11. [Example](https://github.com/facebook/react-native/issues/28503#issuecomment-696026013)
+1. [Verify](https://github.com/facebook/react-native/issues/28503#issuecomment-621662670) XCode has enough permissions.
+1. More solutions might be found in this [thread](https://github.com/facebook/react-native/issues/28503).
+
+####  Swift errors
 
 If you experience errors such as `Undefined symbol: associated type descriptor for FloatLiteralType` or `Undefined symbol: __swift_FORCE_LOAD_$_swiftCompatibility50` after going through the [Getting Started](getting-started/index) tutorial you must do as follows:
 

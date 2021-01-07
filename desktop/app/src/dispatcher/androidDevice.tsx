@@ -19,10 +19,12 @@ import which from 'which';
 import {promisify} from 'util';
 import {ServerPorts} from '../reducers/application';
 import {Client as ADBClient} from 'adbkit';
+import {addErrorNotification} from '../reducers/notifications';
 
 function createDevice(
   adbClient: ADBClient,
   device: any,
+  store: Store,
   ports?: ServerPorts,
 ): Promise<AndroidDevice | undefined> {
   return new Promise((resolve, reject) => {
@@ -36,6 +38,9 @@ function createDevice(
       .then(async (props) => {
         try {
           let name = props['ro.product.model'];
+          const abiString = props['ro.product.cpu.abilist'] || '';
+          const sdkVersion = props['ro.build.version.sdk'] || '';
+          const abiList = abiString.length > 0 ? abiString.split(',') : [];
           if (type === 'emulator') {
             name = (await getRunningEmulatorName(device.id)) || name;
           }
@@ -44,7 +49,14 @@ function createDevice(
           );
           const androidLikeDevice = new (isKaiOSDevice
             ? KaiOSDevice
-            : AndroidDevice)(device.id, type, name, adbClient);
+            : AndroidDevice)(
+            device.id,
+            type,
+            name,
+            adbClient,
+            abiList,
+            sdkVersion,
+          );
           if (ports) {
             await androidLikeDevice
               .reverse([ports.secure, ports.insecure])
@@ -69,7 +81,18 @@ function createDevice(
         ) {
           console.debug('Device still connecting: ' + device.id);
         } else {
-          console.error('Failed to initialize device: ' + device.id, e);
+          const isAuthorizationError = (e?.message as string)?.includes(
+            'device unauthorized',
+          );
+          store.dispatch(
+            addErrorNotification(
+              'Could not connect to ' + device.id,
+              isAuthorizationError
+                ? 'Make sure to authorize debugging on the phone'
+                : 'Failed to setup connection',
+              e,
+            ),
+          );
         }
         resolve(undefined); // not ready yet, we will find it in the next tick
       });
@@ -82,7 +105,7 @@ export async function getActiveAndroidDevices(
   const client = await getAdbClient(store);
   const androidDevices = await client.listDevices();
   const devices = await Promise.all(
-    androidDevices.map((device) => createDevice(client, device)),
+    androidDevices.map((device) => createDevice(client, device, store)),
   );
   return devices.filter(Boolean) as any;
 }
@@ -191,6 +214,7 @@ export default (store: Store, logger: Logger) => {
     const androidDevice = await createDevice(
       adbClient,
       deviceData,
+      store,
       store.getState().application.serverPorts,
     );
     if (!androidDevice) {

@@ -9,7 +9,6 @@
 
 import React from 'react';
 import {connect} from 'react-redux';
-import {colors, GK} from 'flipper';
 
 import config from '../../fb-stubs/config';
 import {PluginNotification} from '../../reducers/notifications';
@@ -20,7 +19,6 @@ import {StaticView, setStaticView} from '../../reducers/connections';
 import {setActiveSheet} from '../../reducers/application';
 import UserAccount from '../UserAccount';
 import SupportRequestFormV2 from '../../fb-stubs/SupportRequestFormV2';
-import WatchTools from '../../fb-stubs/WatchTools';
 import {
   isStaticViewActive,
   PluginIcon,
@@ -29,6 +27,11 @@ import {
 } from './sidebarUtils';
 import {Group} from '../../reducers/supportForm';
 import {getInstance} from '../../fb-stubs/Logger';
+import {ConsoleLogs, errorCounterAtom} from '../ConsoleLogs';
+import {useValue} from 'flipper-plugin';
+import {colors} from '../../ui';
+import GK from '../../fb-stubs/GK';
+import WatchTools from '../../fb-stubs/WatchTools';
 
 type OwnProps = {};
 
@@ -103,6 +106,7 @@ function MainSidebarUtilsSection({
         />
         Manage Plugins
       </ListItem>
+      <DebugLogsEntry staticView={staticView} setStaticView={setStaticView} />
       {config.showLogin && <UserAccount />}
     </div>
   );
@@ -139,12 +143,12 @@ const RenderNotificationsEntry = connect<
 >(
   ({
     connections: {staticView},
-    notifications: {activeNotifications, blacklistedPlugins},
+    notifications: {activeNotifications, blocklistedPlugins},
   }) => ({
     numNotifications: (() => {
-      const blacklist = new Set(blacklistedPlugins);
+      const blocklist = new Set(blocklistedPlugins);
       return activeNotifications.filter(
-        (n: PluginNotification) => !blacklist.has(n.pluginId),
+        (n: PluginNotification) => !blocklist.has(n.pluginId),
       ).length;
     })(),
     staticView,
@@ -171,3 +175,26 @@ const RenderNotificationsEntry = connect<
     </ListItem>
   );
 });
+
+function DebugLogsEntry({
+  staticView,
+  setStaticView,
+}: {
+  staticView: StaticView;
+  setStaticView: (payload: StaticView) => void;
+}) {
+  const active = isStaticViewActive(staticView, ConsoleLogs);
+  const errorCount = useValue(errorCounterAtom);
+  return (
+    <ListItem onClick={() => setStaticView(ConsoleLogs)} active={active}>
+      <PluginIcon
+        name="caution-octagon"
+        color={colors.light50}
+        isActive={active}
+      />
+      <PluginName count={errorCount} isActive={active}>
+        Debug Logs
+      </PluginName>
+    </ListItem>
+  );
+}

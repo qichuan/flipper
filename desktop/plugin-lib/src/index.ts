@@ -7,6 +7,9 @@
  * @format
  */
 
-export {default as PluginDetails} from './PluginDetails';
-export {default as getPluginDetails} from './getPluginDetails';
+export * from './PluginDetails';
+export * from './getPluginDetails';
 export * from './pluginInstaller';
+export * from './getUpdatablePlugins';
+export * from './getSourcePlugins';
+export * from './pluginPaths';

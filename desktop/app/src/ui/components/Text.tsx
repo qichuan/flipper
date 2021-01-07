@@ -8,32 +8,24 @@
  */
 
 import styled from '@emotion/styled';
-import {
-  ColorProperty,
-  FontSizeProperty,
-  TextAlignProperty,
-  FontFamilyProperty,
-  WhiteSpaceProperty,
-  WordWrapProperty,
-  CursorProperty,
-} from 'csstype';
+import {Property} from 'csstype';
 
 /**
  * A Text component.
  */
 const Text = styled.span<{
-  color?: ColorProperty;
+  color?: Property.Color;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
-  align?: TextAlignProperty;
-  size?: FontSizeProperty<number>;
+  align?: Property.TextAlign;
+  size?: Property.FontSize<number>;
   code?: boolean;
-  family?: FontFamilyProperty;
+  family?: Property.FontFamily;
   selectable?: boolean;
-  wordWrap?: WordWrapProperty;
-  whiteSpace?: WhiteSpaceProperty;
-  cursor?: CursorProperty;
+  wordWrap?: Property.WordWrap;
+  whiteSpace?: Property.WhiteSpace;
+  cursor?: Property.Cursor;
 }>((props) => ({
   color: props.color ? props.color : 'inherit',
   cursor: props.cursor ? props.cursor : 'auto',
@@ -48,9 +40,11 @@ const Text = styled.span<{
     : props.family,
   overflow: props.code ? 'auto' : 'visible',
   userSelect:
-    props.selectable || (props.code && typeof props.selectable === 'undefined')
+    props.selectable === false
+      ? 'none'
+      : props.selectable === true
       ? 'text'
-      : 'none',
+      : undefined,
   wordWrap: props.code ? 'break-word' : props.wordWrap,
   whiteSpace:
     props.code && typeof props.whiteSpace === 'undefined'

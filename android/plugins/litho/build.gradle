@@ -21,6 +21,10 @@ android {
         compileOnly deps.lithoAnnotations
         implementation project(':android')
         implementation deps.lithoCore
+        api deps.lithoEditorCore
+        api(deps.lithoEditorFlipper) {
+            exclude group:'com.facebook.flipper', module:'flipper'
+        }
         implementation deps.lithoSectionsDebug
         implementation deps.lithoSectionsCore
         implementation deps.lithoWidget

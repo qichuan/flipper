@@ -1,8 +1,8 @@
 {
   "$schema": "https://fbflipper.com/schemas/plugin-package/v2.json",
   "name": "flipper-plugin-react-devtools",
-  "id": "flipper-plugin-react-devtools",
-  "version": "0.47.0",
+  "id": "React",
+  "version": "0.0.0",
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",
@@ -12,15 +12,12 @@
   "dependencies": {
     "address": "^1.1.2",
     "get-port": "^5.0.0",
-    "react-devtools-core": "^4.6.0"
+    "react-devtools-core": "^4.10.1"
   },
   "title": "React DevTools",
   "icon": "app-react",
   "bugs": {
     "email": "danielbuechele@fb.com"
   },
-  "devDependencies": {},
-  "scripts": {
-    "prepack": "../../pkg/bin/run bundle"
-  }
+  "devDependencies": {}
 }

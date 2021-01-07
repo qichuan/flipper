@@ -27,7 +27,7 @@ type State = {
   filterRows: (row: TableBodyRow) => boolean;
 };
 
-const rowMatchesFilters = (filters: Array<Filter>, row: TableBodyRow) =>
+export const rowMatchesFilters = (filters: Array<Filter>, row: TableBodyRow) =>
   filters
     .map((filter: Filter) => {
       if (filter.type === 'enum' && row.type != null) {
@@ -56,7 +56,7 @@ const rowMatchesFilters = (filters: Array<Filter>, row: TableBodyRow) =>
     })
     .every((x) => x === true);
 
-function rowMatchesRegex(values: Array<string>, regex: string): boolean {
+export function rowMatchesRegex(values: Array<string>, regex: string): boolean {
   try {
     const re = new RegExp(regex);
     return values.some((x) => re.test(x));
@@ -65,10 +65,10 @@ function rowMatchesRegex(values: Array<string>, regex: string): boolean {
   }
 }
 
-function rowMatchesSearchTerm(
+export function rowMatchesSearchTerm(
   searchTerm: string,
   isRegex: boolean,
-  isBodySearchEnabled: boolean,
+  isContentSearchEnabled: boolean,
   row: TableBodyRow,
 ): boolean {
   if (searchTerm == null || searchTerm.length === 0) {
@@ -77,13 +77,8 @@ function rowMatchesSearchTerm(
   const rowValues = Object.keys(row.columns).map((key) =>
     textContent(row.columns[key].value),
   );
-  if (isBodySearchEnabled) {
-    if (row.requestBody) {
-      rowValues.push(row.requestBody);
-    }
-    if (row.responseBody) {
-      rowValues.push(row.responseBody);
-    }
+  if (isContentSearchEnabled && typeof row.getSearchContent === 'function') {
+    rowValues.push(row.getSearchContent());
   }
   if (row.filterValue != null) {
     rowValues.push(row.filterValue);
@@ -96,14 +91,14 @@ function rowMatchesSearchTerm(
   );
 }
 
-const filterRowsFactory = (
+export const filterRowsFactory = (
   filters: Array<Filter>,
   searchTerm: string,
   regexSearch: boolean,
-  bodySearch: boolean,
+  contentSearch: boolean,
 ) => (row: TableBodyRow): boolean =>
   rowMatchesFilters(filters, row) &&
-  rowMatchesSearchTerm(searchTerm, regexSearch, bodySearch, row);
+  rowMatchesSearchTerm(searchTerm, regexSearch, contentSearch, row);
 
 class SearchableManagedTable extends PureComponent<Props, State> {
   static defaultProps = {
@@ -115,7 +110,7 @@ class SearchableManagedTable extends PureComponent<Props, State> {
       this.props.filters,
       this.props.searchTerm,
       this.props.regexEnabled || false,
-      this.props.bodySearchEnabled || false,
+      this.props.contentSearchEnabled || false,
     ),
   };
 
@@ -127,7 +122,7 @@ class SearchableManagedTable extends PureComponent<Props, State> {
     if (
       nextProps.searchTerm !== this.props.searchTerm ||
       nextProps.regexEnabled != this.props.regexEnabled ||
-      nextProps.bodySearchEnabled != this.props.bodySearchEnabled ||
+      nextProps.contentSearchEnabled != this.props.contentSearchEnabled ||
       !deepEqual(this.props.filters, nextProps.filters)
     ) {
       this.setState({
@@ -135,7 +130,7 @@ class SearchableManagedTable extends PureComponent<Props, State> {
           nextProps.filters,
           nextProps.searchTerm,
           nextProps.regexEnabled || false,
-          nextProps.bodySearchEnabled || false,
+          nextProps.contentSearchEnabled || false,
         ),
       });
     }
@@ -157,7 +152,7 @@ class SearchableManagedTable extends PureComponent<Props, State> {
         filter={this.state.filterRows}
         rows={rows.filter(this.state.filterRows)}
         onAddFilter={addFilter}
-        ref={innerRef}
+        innerRef={innerRef}
       />
     );
   }

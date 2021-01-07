@@ -14,21 +14,20 @@ import {
   Text,
   Glyph,
   styled,
-  FlipperPlugin,
   FlexColumn,
-  FlipperBasePlugin,
   ToggleButton,
   brandColors,
   Spacer,
   Heading,
-  Client,
-  BaseDevice,
-  StaticView,
-} from 'flipper';
-import {BackgroundColorProperty} from 'csstype';
+} from '../../ui';
+import {Property} from 'csstype';
 import {getPluginTitle} from '../../utils/pluginUtils';
+import {PluginDefinition} from '../../plugin';
+import {StaticView} from '../../reducers/connections';
+import BaseDevice from '../../devices/BaseDevice';
+import Client from '../../Client';
 
-export type FlipperPlugins = typeof FlipperPlugin[];
+export type FlipperPlugins = PluginDefinition[];
 export type PluginsByCategory = [string, FlipperPlugins][];
 
 export const ListItem = styled.div<{active?: boolean; disabled?: boolean}>(
@@ -71,7 +70,7 @@ export function PluginIcon({
 }
 
 const PluginShape = styled(FlexBox)<{
-  backgroundColor?: BackgroundColorProperty;
+  backgroundColor?: Property.BackgroundColor;
 }>(({backgroundColor}) => ({
   marginRight: 8,
   backgroundColor,
@@ -86,6 +85,7 @@ const PluginShape = styled(FlexBox)<{
 
 export const PluginName = styled(Text)<{isActive?: boolean; count?: number}>(
   (props) => ({
+    cursor: 'default',
     minWidth: 0,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
@@ -116,7 +116,7 @@ export function isStaticViewActive(
   current: StaticView,
   selected: StaticView,
 ): boolean {
-  return current && selected && current === selected;
+  return Boolean(current && selected && current === selected);
 }
 
 export const CategoryName = styled(PluginName)({
@@ -133,7 +133,7 @@ export const Plugins = styled(FlexColumn)({
 export const PluginSidebarListItem: React.FC<{
   onClick: () => void;
   isActive: boolean;
-  plugin: typeof FlipperBasePlugin;
+  plugin: PluginDefinition;
   app?: string | null | undefined;
   helpRef?: any;
   provided?: any;
@@ -166,7 +166,12 @@ export const PluginSidebarListItem: React.FC<{
         backgroundColor={starred === false ? colors.light20 : iconColor}
         color={colors.white}
       />
-      <PluginName>{getPluginTitle(plugin)}</PluginName>
+      <PluginName
+        title={`${getPluginTitle(plugin)} ${plugin.version} ${
+          plugin.details?.description ? '- ' + plugin.details?.description : ''
+        }`}>
+        {getPluginTitle(plugin)}
+      </PluginName>
       {starred !== undefined && (!starred || isActive) && (
         <ToggleButton
           onClick={onFavorite}

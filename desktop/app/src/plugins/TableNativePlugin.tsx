@@ -27,7 +27,7 @@ import {
   TableColumnOrderVal,
   TableBodyRow,
 } from '../ui/components/table/types';
-import DetailSidebar from '../chrome/DetailSidebar';
+import {DetailSidebar} from 'flipper-plugin';
 import {FlipperPlugin} from '../plugin';
 import textContent from '../utils/textContent';
 import createPaste from '../fb-stubs/createPaste';
@@ -261,6 +261,7 @@ export default function createTableNativePlugin(id: string, title: string) {
       title,
       icon: 'apps',
       name: id,
+      pluginType: 'client',
       // all hmm...
       specVersion: 1,
       version: 'auto',
@@ -353,6 +354,10 @@ export default function createTableNativePlugin(id: string, title: string) {
 
     getTableMetadata = () => {
       if (!this.props.persistedState.tableMetadata) {
+        if (!this.client.isConnected) {
+          this.setState({error: 'Application disconnected'});
+          return;
+        }
         this.client
           .call('getMetadata')
           .then((metadata) => {

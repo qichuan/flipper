@@ -10,11 +10,11 @@
 import {padStart} from 'lodash';
 import React, {createContext} from 'react';
 import {MenuItemConstructorOptions} from 'electron';
+import {message} from 'antd';
 
 import {
   ContextMenu,
-  FlexColumn,
-  FlexRow,
+  Layout,
   Button,
   Text,
   Glyph,
@@ -27,7 +27,6 @@ import {
   TableHighlightedRows,
   TableRows,
   TableBodyRow,
-  produce,
 } from 'flipper';
 import {
   Request,
@@ -37,16 +36,28 @@ import {
   ResponseFollowupChunk,
   Header,
   MockRoute,
+  PartialResponses,
 } from './types';
 import {convertRequestToCurlCommand, getHeaderValue, decodeBody} from './utils';
 import RequestDetails from './RequestDetails';
 import {clipboard} from 'electron';
 import {URL} from 'url';
 import {MockResponseDialog} from './MockResponseDialog';
-import {combineBase64Chunks} from './chunks';
-import {PluginClient, createState, usePlugin, useValue} from 'flipper-plugin';
+import {assembleChunksIfResponseIsComplete} from './chunks';
+import {
+  PluginClient,
+  Device,
+  createState,
+  usePlugin,
+  useValue,
+} from 'flipper-plugin';
+import {remote, OpenDialogOptions} from 'electron';
+import fs from 'fs';
+import electron from 'electron';
 
 const LOCALSTORAGE_MOCK_ROUTE_LIST_KEY = '__NETWORK_CACHED_MOCK_ROUTE_LIST';
+const LOCALSTORAGE_RESPONSE_BODY_FORMAT_KEY =
+  '__NETWORK_CACHED_RESPONSE_BODY_FORMAT';
 
 export const BodyOptions = {
   formatted: 'formatted',
@@ -119,24 +130,34 @@ const TextEllipsis = styled(Text)({
 
 // State management
 export interface NetworkRouteManager {
-  addRoute(): void;
+  addRoute(): string | null;
   modifyRoute(id: string, routeChange: Partial<Route>): void;
   removeRoute(id: string): void;
+  enableRoute(id: string): void;
   copyHighlightedCalls(
     highlightedRows: Set<string>,
     requests: {[id: string]: Request},
     responses: {[id: string]: Response},
   ): void;
+  importRoutes(): void;
+  exportRoutes(): void;
+  clearRoutes(): void;
 }
 const nullNetworkRouteManager: NetworkRouteManager = {
-  addRoute() {},
+  addRoute(): string | null {
+    return '';
+  },
   modifyRoute(_id: string, _routeChange: Partial<Route>) {},
   removeRoute(_id: string) {},
+  enableRoute(_id: string) {},
   copyHighlightedCalls(
     _highlightedRows: Set<string>,
     _requests: {[id: string]: Request},
     _responses: {[id: string]: Response},
   ) {},
+  importRoutes() {},
+  exportRoutes() {},
+  clearRoutes() {},
 };
 export const NetworkRouteContext = createContext<NetworkRouteManager>(
   nullNetworkRouteManager,
@@ -153,7 +174,10 @@ export function plugin(client: PluginClient<Events, Methods>) {
   const nextRouteId = createState<number>(0);
   const isMockResponseSupported = createState<boolean>(false);
   const showMockResponseDialog = createState<boolean>(false);
-  const detailBodyFormat = createState<string>(BodyOptions.parsed);
+  const detailBodyFormat = createState<string>(
+    localStorage.getItem(LOCALSTORAGE_RESPONSE_BODY_FORMAT_KEY) ||
+      BodyOptions.parsed,
+  );
   const highlightedRows = createState<Set<string> | null | undefined>(
     new Set(),
   );
@@ -167,12 +191,10 @@ export function plugin(client: PluginClient<Events, Methods>) {
     {persist: 'responses'},
   );
 
-  const partialResponses = createState<{
-    [id: string]: {
-      initialResponse?: Response;
-      followupChunks: {[id: number]: string};
-    };
-  }>({}, {persist: 'partialResponses'});
+  const partialResponses = createState<PartialResponses>(
+    {},
+    {persist: 'partialResponses'},
+  );
 
   client.onDeepLink((payload: unknown) => {
     if (typeof payload === 'string') {
@@ -223,106 +245,51 @@ export function plugin(client: PluginClient<Events, Methods>) {
     const message: Response | ResponseFollowupChunk = data as
       | Response
       | ResponseFollowupChunk;
-    if (message.index !== undefined && message.index > 0) {
-      // It's a follow up chunk
-      const followupChunk: ResponseFollowupChunk = message as ResponseFollowupChunk;
-      const partialResponseEntry = partialResponses.get()[followupChunk.id] ?? {
-        followupChunks: {},
-      };
-
-      const newPartialResponseEntry = produce(partialResponseEntry, (draft) => {
-        draft.followupChunks[followupChunk.index] = followupChunk.data;
-      });
-      const newPartialResponse = {
-        ...partialResponses.get(),
-        [followupChunk.id]: newPartialResponseEntry,
-      };
-
-      assembleChunksIfResponseIsComplete(newPartialResponse, followupChunk.id);
-      return;
-    }
-    // It's an initial chunk
-    const partialResponse: Response = message as Response;
-    const partialResponseEntry = partialResponses.get()[partialResponse.id] ?? {
-      followupChunks: {},
-    };
-    const newPartialResponseEntry = {
-      ...partialResponseEntry,
-      initialResponse: partialResponse,
-    };
-    const newPartialResponse = {
-      ...partialResponses.get(),
-      [partialResponse.id]: newPartialResponseEntry,
-    };
-    assembleChunksIfResponseIsComplete(newPartialResponse, partialResponse.id);
-  });
-
-  function assembleChunksIfResponseIsComplete(
-    partialResp: {
-      [id: string]: {
-        initialResponse?: Response;
-        followupChunks: {[id: number]: string};
-      };
-    },
-    responseId: string,
-  ) {
-    const partialResponseEntry = partialResp[responseId];
-    const numChunks = partialResponseEntry.initialResponse?.totalChunks;
-    if (
-      !partialResponseEntry.initialResponse ||
-      !numChunks ||
-      Object.keys(partialResponseEntry.followupChunks).length + 1 < numChunks
-    ) {
-      // Partial response not yet complete, do nothing.
-      partialResponses.set(partialResp);
-      return;
-    }
-    // Partial response has all required chunks, convert it to a full Response.
-
-    const response: Response = partialResponseEntry.initialResponse;
-    const allChunks: string[] =
-      response.data != null
-        ? [
-            response.data,
-            ...Object.entries(partialResponseEntry.followupChunks)
-              // It's important to parseInt here or it sorts lexicographically
-              .sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10))
-              .map(([_k, v]: [string, string]) => v),
-          ]
-        : [];
-    const data = combineBase64Chunks(allChunks);
-
-    const newResponse = {
-      ...response,
-      // Currently data is always decoded at render time, so re-encode it to match the single response format.
-      data: btoa(data),
-    };
-
-    responses.update((draft) => {
-      draft[newResponse.id] = newResponse;
-    });
 
     partialResponses.update((draft) => {
-      delete draft[newResponse.id];
+      if (!draft[message.id]) {
+        draft[message.id] = {
+          followupChunks: {},
+        };
+      }
+      const entry = draft[message.id];
+      if (message.index !== undefined && message.index > 0) {
+        // It's a follow up chunk
+        const chunk = message as ResponseFollowupChunk;
+        entry.followupChunks[chunk.index] = chunk.data;
+      } else {
+        // It's an initial chunk
+        entry.initialResponse = message as Response;
+      }
     });
+    assembleChunksIfResponseIsComplete(partialResponses, responses, message.id);
+  });
+
+  function supportsMocks(device: Device): Promise<boolean> {
+    if (device.isArchived) {
+      return Promise.resolve(true);
+    } else {
+      return client.supportsMethod('mockResponses');
+    }
   }
 
   function init() {
-    client.supportsMethod('mockResponses').then((result) => {
+    supportsMocks(client.device).then((result) => {
       const newRoutes = JSON.parse(
-        localStorage.getItem(LOCALSTORAGE_MOCK_ROUTE_LIST_KEY) || '{}',
+        localStorage.getItem(LOCALSTORAGE_MOCK_ROUTE_LIST_KEY + client.appId) ||
+          '{}',
       );
       routes.set(newRoutes);
       isMockResponseSupported.set(result);
       showMockResponseDialog.set(false);
-      nextRouteId.set(Object.keys(routes).length);
+      nextRouteId.set(Object.keys(routes.get()).length);
 
       informClientMockChange(routes.get());
     });
 
     // declare new variable to be called inside the interface
     networkRouteManager.set({
-      addRoute() {
+      addRoute(): string | null {
         const newNextRouteId = nextRouteId.get();
         routes.update((draft) => {
           draft[newNextRouteId.toString()] = {
@@ -331,9 +298,11 @@ export function plugin(client: PluginClient<Events, Methods>) {
             responseData: '',
             responseHeaders: {},
             responseStatus: '200',
+            enabled: true,
           };
         });
         nextRouteId.set(newNextRouteId + 1);
+        return String(newNextRouteId);
       },
       modifyRoute(id: string, routeChange: Partial<Route>) {
         if (!routes.get().hasOwnProperty(id)) {
@@ -348,6 +317,14 @@ export function plugin(client: PluginClient<Events, Methods>) {
         if (routes.get().hasOwnProperty(id)) {
           routes.update((draft) => {
             delete draft[id];
+          });
+        }
+        informClientMockChange(routes.get());
+      },
+      enableRoute(id: string) {
+        if (routes.get().hasOwnProperty(id)) {
+          routes.update((draft) => {
+            draft[id].enabled = !draft[id].enabled;
           });
         }
         informClientMockChange(routes.get());
@@ -368,7 +345,7 @@ export function plugin(client: PluginClient<Events, Methods>) {
 
           // convert data TODO: we only want this for non-binary data! See D23403095
           const responseData =
-            response && response.data ? decodeBody(response) : null;
+            response && response.data ? decodeBody(response) : '';
 
           const newNextRouteId = nextRouteId.get();
           routes.update((draft) => {
@@ -378,11 +355,80 @@ export function plugin(client: PluginClient<Events, Methods>) {
               responseData: responseData as string,
               responseHeaders: headers,
               responseStatus: responses[row].status.toString(),
+              enabled: true,
             };
           });
           nextRouteId.set(newNextRouteId + 1);
         });
 
+        informClientMockChange(routes.get());
+      },
+      importRoutes() {
+        const options: OpenDialogOptions = {
+          properties: ['openFile'],
+          filters: [{extensions: ['json'], name: 'Flipper Route Files'}],
+        };
+        remote.dialog.showOpenDialog(options).then((result) => {
+          const filePaths = result.filePaths;
+          if (filePaths.length > 0) {
+            fs.readFile(filePaths[0], 'utf8', (err, data) => {
+              if (err) {
+                message.error('Unable to import file');
+                return;
+              }
+              const importedRoutes = JSON.parse(data);
+              importedRoutes?.forEach((importedRoute: Route) => {
+                if (importedRoute != null) {
+                  const newNextRouteId = nextRouteId.get();
+                  routes.update((draft) => {
+                    draft[newNextRouteId.toString()] = {
+                      requestUrl: importedRoute.requestUrl,
+                      requestMethod: importedRoute.requestMethod,
+                      responseData: importedRoute.responseData as string,
+                      responseHeaders: importedRoute.responseHeaders,
+                      responseStatus: importedRoute.responseStatus,
+                      enabled: true,
+                    };
+                  });
+                  nextRouteId.set(newNextRouteId + 1);
+                }
+              });
+              informClientMockChange(routes.get());
+            });
+          }
+        });
+      },
+      exportRoutes() {
+        remote.dialog
+          .showSaveDialog(
+            // @ts-ignore This appears to work but isn't allowed by the types
+            null,
+            {
+              title: 'Export Routes',
+              defaultPath: 'NetworkPluginRoutesExport.json',
+            },
+          )
+          .then((result: electron.SaveDialogReturnValue) => {
+            const file = result.filePath;
+            if (!file) {
+              return;
+            }
+            fs.writeFile(
+              file,
+              JSON.stringify(Object.values(routes.get()), null, 2),
+              'utf8',
+              (err) => {
+                if (err) {
+                  message.error('Failed to store mock routes: ' + err);
+                } else {
+                  message.info('Successfully exported mock routes');
+                }
+              },
+            );
+          });
+      },
+      clearRoutes() {
+        routes.set({});
         informClientMockChange(routes.get());
       },
     });
@@ -450,22 +496,27 @@ export function plugin(client: PluginClient<Events, Methods>) {
     if (isMockResponseSupported.get()) {
       const routesValuesArray = Object.values(filteredRoutes);
       localStorage.setItem(
-        LOCALSTORAGE_MOCK_ROUTE_LIST_KEY,
+        LOCALSTORAGE_MOCK_ROUTE_LIST_KEY + client.appId,
         JSON.stringify(routesValuesArray),
       );
 
-      try {
-        await client.send('mockResponses', {
-          routes: routesValuesArray.map((route: Route) => ({
-            requestUrl: route.requestUrl,
-            method: route.requestMethod,
-            data: route.responseData,
-            headers: [...Object.values(route.responseHeaders)],
-            status: route.responseStatus,
-          })),
-        });
-      } catch (e) {
-        console.error('Failed to mock responses.', e);
+      if (!client.device.isArchived) {
+        try {
+          await client.send('mockResponses', {
+            routes: routesValuesArray
+              .filter((e) => e.enabled)
+              .map((route: Route) => ({
+                requestUrl: route.requestUrl,
+                method: route.requestMethod,
+                data: route.responseData,
+                headers: [...Object.values(route.responseHeaders)],
+                status: route.responseStatus,
+                enabled: route.enabled,
+              })),
+          });
+        } catch (e) {
+          console.error('Failed to mock responses.', e);
+        }
       }
     }
   }
@@ -496,6 +547,7 @@ export function plugin(client: PluginClient<Events, Methods>) {
     },
     onSelectFormat(bodyFormat: string) {
       detailBodyFormat.set(bodyFormat);
+      localStorage.setItem(LOCALSTORAGE_RESPONSE_BODY_FORMAT_KEY, bodyFormat);
     },
     copyRequestCurlCommand,
     init,
@@ -515,7 +567,7 @@ export function Component() {
   const networkRouteManager = useValue(instance.networkRouteManager);
 
   return (
-    <FlexColumn grow={true}>
+    <Layout.Container grow={true}>
       <NetworkRouteContext.Provider value={networkRouteManager}>
         <NetworkTable
           requests={requests || {}}
@@ -533,7 +585,7 @@ export function Component() {
         />
         <Sidebar />
       </NetworkRouteContext.Provider>
-    </FlexColumn>
+    </Layout.Container>
   );
 }
 
@@ -821,7 +873,7 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
       <>
         <NetworkTable.ContextMenu
           items={this.contextMenuItems()}
-          component={FlexColumn}>
+          component={Layout.Container}>
           <SearchableTable
             virtual={true}
             multiline={false}
@@ -841,12 +893,12 @@ class NetworkTable extends PureComponent<NetworkTableProps, NetworkTableState> {
             clearSearchTerm={this.props.searchTerm !== ''}
             defaultSearchTerm={this.props.searchTerm}
             actions={
-              <FlexRow>
+              <Layout.Horizontal gap>
                 <Button onClick={this.props.clear}>Clear Table</Button>
                 {this.props.isMockResponseSupported && (
                   <Button onClick={this.props.onMockButtonPressed}>Mock</Button>
                 )}
-              </FlexRow>
+              </Layout.Horizontal>
             }
           />
         </NetworkTable.ContextMenu>

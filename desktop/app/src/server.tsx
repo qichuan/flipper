@@ -26,6 +26,7 @@ import invariant from 'invariant';
 import tls from 'tls';
 import net, {Socket} from 'net';
 import {Responder, Payload, ReactiveSocket} from 'rsocket-types';
+import constants from './fb-stubs/constants';
 import GK from './fb-stubs/GK';
 import {initJsEmulatorIPC} from './utils/js-client-server-utils/serverUtils';
 import {buildClientId} from './utils/clientUtils';
@@ -37,9 +38,10 @@ import querystring from 'querystring';
 import {IncomingMessage} from 'http';
 import ws from 'ws';
 import {initSelfInpector} from './utils/self-inspection/selfInspectionUtils';
-import ClientDevice from './devices/ClientDevice';
+import DummyDevice from './devices/DummyDevice';
 import BaseDevice from './devices/BaseDevice';
 import {sideEffect} from './utils/sideEffect';
+import {destroyDevice} from './reducers/connections';
 
 type ClientInfo = {
   connection: FlipperClientConnection<any, any> | null | undefined;
@@ -183,10 +185,8 @@ class Server extends EventEmitter {
         req: IncomingMessage;
         secure: boolean;
       }) => {
-        return (
-          info.origin.startsWith('chrome-extension://') ||
-          info.origin.startsWith('localhost:') ||
-          info.origin.startsWith('http://localhost:')
+        return constants.VALID_WEB_SOCKET_REQUEST_ORIGIN_PREFIXES.some(
+          (validPrefix) => info.origin.startsWith(validPrefix),
         );
       },
     });
@@ -206,10 +206,7 @@ class Server extends EventEmitter {
         Object.values(clients).map((p) =>
           p.then((c) => this.removeConnection(c.id)),
         );
-        this.store.dispatch({
-          type: 'UNREGISTER_DEVICES',
-          payload: new Set([deviceId]),
-        });
+        destroyDevice(this.store, this.logger, deviceId);
       };
 
       ws.on('message', (rawMessage: any) => {
@@ -309,7 +306,7 @@ class Server extends EventEmitter {
     if (transformedMedium === 'WWW') {
       this.store.dispatch({
         type: 'REGISTER_DEVICE',
-        payload: new ClientDevice(device_id, app, os),
+        payload: new DummyDevice(device_id, app + ' Server Exchanged', os),
       });
     }
 
@@ -601,7 +598,7 @@ class Server extends EventEmitter {
   removeConnection(id: string) {
     const info = this.connections.get(id);
     if (info) {
-      info.client.close();
+      info.client.disconnect();
       this.connections.delete(id);
       this.emit('clients-change');
       this.emit('removed-client', id);

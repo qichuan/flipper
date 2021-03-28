@@ -7,112 +7,118 @@
  * @format
  */
 
-import {Actions} from './';
-import {
-  ActivatablePluginDetails,
-  InstalledPluginDetails,
-} from 'flipper-plugin-lib';
-import {PluginDefinition} from '../plugin';
+import type {Actions} from './';
+import type {ActivatablePluginDetails} from 'flipper-plugin-lib';
+import type {PluginDefinition} from '../plugin';
 import {produce} from 'immer';
-import semver from 'semver';
 
 export type State = {
-  installedPlugins: Map<string, InstalledPluginDetails>;
-  uninstalledPlugins: Set<string>;
-  pluginActivationQueue: PluginActivationRequest[];
+  pluginCommandsQueue: PluginCommand[];
 };
 
-export type PluginActivationRequest = {
+export type PluginCommand =
+  | LoadPluginAction
+  | UninstallPluginAction
+  | UpdatePluginAction
+  | SwitchPluginAction;
+
+export type LoadPluginActionPayload = {
   plugin: ActivatablePluginDetails;
   enable: boolean;
   notifyIfFailed: boolean;
 };
 
+export type LoadPluginAction = {
+  type: 'LOAD_PLUGIN';
+  payload: LoadPluginActionPayload;
+};
+
+export type UninstallPluginActionPayload = {
+  plugin: PluginDefinition;
+};
+
+export type UninstallPluginAction = {
+  type: 'UNINSTALL_PLUGIN';
+  payload: UninstallPluginActionPayload;
+};
+
+export type UpdatePluginActionPayload = {
+  plugin: PluginDefinition;
+  enablePlugin: boolean;
+};
+
+export type UpdatePluginAction = {
+  type: 'UPDATE_PLUGIN';
+  payload: UpdatePluginActionPayload;
+};
+
+export type SwitchPluginActionPayload = {
+  plugin: PluginDefinition;
+  selectedApp?: string;
+};
+
+export type SwitchPluginAction = {
+  type: 'SWITCH_PLUGIN';
+  payload: SwitchPluginActionPayload;
+};
+
 export type Action =
   | {
-      type: 'REGISTER_INSTALLED_PLUGINS';
-      payload: InstalledPluginDetails[];
-    }
-  | {
-      // Implemented by rootReducer in `store.tsx`
-      type: 'UNINSTALL_PLUGIN';
-      payload: PluginDefinition;
-    }
-  | {
-      type: 'PLUGIN_INSTALLED';
-      payload: InstalledPluginDetails;
-    }
-  | {
-      type: 'ACTIVATE_PLUGINS';
-      payload: PluginActivationRequest[];
-    }
-  | {
-      type: 'PLUGIN_ACTIVATION_HANDLED';
+      type: 'PLUGIN_COMMANDS_PROCESSED';
       payload: number;
-    };
+    }
+  | PluginCommand;
 
 const INITIAL_STATE: State = {
-  installedPlugins: new Map<string, InstalledPluginDetails>(),
-  uninstalledPlugins: new Set<string>(),
-  pluginActivationQueue: [],
+  pluginCommandsQueue: [],
 };
 
 export default function reducer(
   state: State = INITIAL_STATE,
   action: Actions,
 ): State {
-  if (action.type === 'REGISTER_INSTALLED_PLUGINS') {
-    return produce(state, (draft) => {
-      draft.installedPlugins = new Map(
-        action.payload
-          .filter((p) => !state.uninstalledPlugins?.has(p.name))
-          .map((p) => [p.name, p]),
-      );
-    });
-  } else if (action.type === 'PLUGIN_INSTALLED') {
-    const plugin = action.payload;
-    return produce(state, (draft) => {
-      const existing = draft.installedPlugins.get(plugin.name);
-      if (!existing || semver.gt(plugin.version, existing.version)) {
-        draft.installedPlugins.set(plugin.name, plugin);
-      }
-    });
-  } else if (action.type === 'ACTIVATE_PLUGINS') {
-    return produce(state, (draft) => {
-      draft.pluginActivationQueue.push(...action.payload);
-    });
-  } else if (action.type === 'PLUGIN_ACTIVATION_HANDLED') {
-    return produce(state, (draft) => {
-      draft.pluginActivationQueue.splice(0, action.payload);
-    });
-  } else {
-    return {...state};
+  switch (action.type) {
+    case 'LOAD_PLUGIN':
+    case 'UNINSTALL_PLUGIN':
+    case 'UPDATE_PLUGIN':
+    case 'SWITCH_PLUGIN':
+      return produce(state, (draft) => {
+        draft.pluginCommandsQueue.push(action);
+      });
+    case 'PLUGIN_COMMANDS_PROCESSED':
+      return produce(state, (draft) => {
+        draft.pluginCommandsQueue.splice(0, action.payload);
+      });
+    default:
+      return state;
   }
 }
 
-export const registerInstalledPlugins = (
-  payload: InstalledPluginDetails[],
+export const uninstallPlugin = (
+  payload: UninstallPluginActionPayload,
 ): Action => ({
-  type: 'REGISTER_INSTALLED_PLUGINS',
-  payload,
-});
-
-export const uninstallPlugin = (payload: PluginDefinition): Action => ({
   type: 'UNINSTALL_PLUGIN',
   payload,
 });
 
-export const pluginInstalled = (payload: InstalledPluginDetails): Action => ({
-  type: 'PLUGIN_INSTALLED',
+export const loadPlugin = (payload: LoadPluginActionPayload): Action => ({
+  type: 'LOAD_PLUGIN',
   payload,
 });
 
-export const activatePlugin = (payload: PluginActivationRequest): Action => ({
-  type: 'ACTIVATE_PLUGINS',
-  payload: [payload],
+export const pluginCommandsProcessed = (payload: number): Action => ({
+  type: 'PLUGIN_COMMANDS_PROCESSED',
+  payload,
 });
 
-export const pluginActivationHandled = (payload: number): Action => ({
-  type: 'PLUGIN_ACTIVATION_HANDLED',
+export const registerPluginUpdate = (
+  payload: UpdatePluginActionPayload,
+): Action => ({
+  type: 'UPDATE_PLUGIN',
+  payload,
+});
+
+export const switchPlugin = (payload: SwitchPluginActionPayload): Action => ({
+  type: 'SWITCH_PLUGIN',
   payload,
 });

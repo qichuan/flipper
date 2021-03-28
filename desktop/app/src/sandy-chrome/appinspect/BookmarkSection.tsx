@@ -18,11 +18,11 @@ import {
   useTrackedCallback,
   useValue,
 } from 'flipper-plugin';
-import {navPluginStateSelector} from '../../chrome/LocationsButton';
+import {State} from '../../reducers';
 
 // eslint-disable-next-line flipper/no-relative-imports-across-packages
 import type {NavigationPlugin} from '../../../../plugins/navigation/index';
-import {useMemoize} from '../../utils/useMemoize';
+import {useMemoize} from 'flipper-plugin';
 import styled from '@emotion/styled';
 
 const {Text} = Typography;
@@ -136,3 +136,15 @@ const StyledAutoComplete = styled(AutoComplete)({
     flex: 1,
   },
 });
+
+const NAVIGATION_PLUGIN_ID = 'Navigation';
+
+function navPluginStateSelector(state: State) {
+  const {selectedApp, clients} = state.connections;
+  if (!selectedApp) return undefined;
+  const client = clients.find((client) => client.id === selectedApp);
+  if (!client) return undefined;
+  return client.sandyPluginStates.get(NAVIGATION_PLUGIN_ID)?.instanceApi as
+    | undefined
+    | NavigationPlugin;
+}

@@ -35,13 +35,18 @@ export {
 } from './plugin/PluginContext';
 export {createState, useValue, Atom} from './state/atom';
 export {batch} from './state/batch';
-export {FlipperLib} from './plugin/FlipperLib';
+export {
+  FlipperLib,
+  getFlipperLibImplementation as _getFlipperLibImplementation,
+  setFlipperLibImplementation as _setFlipperLibImplementation,
+} from './plugin/FlipperLib';
 export {
   MenuEntry,
   NormalizedMenuEntry,
   buildInMenuEntries as _buildInMenuEntries,
   DefaultKeyboardAction,
 } from './plugin/MenuEntry';
+export {Notification} from './plugin/Notification';
 
 export {theme} from './ui/theme';
 export {Layout} from './ui/Layout';
@@ -50,6 +55,8 @@ export {
   NuxManagerContext as _NuxManagerContext,
   createNuxManager as _createNuxManager,
 } from './ui/NUX';
+export {Sidebar as _Sidebar} from './ui/Sidebar';
+export {DetailSidebar} from './ui/DetailSidebar';
 
 export {renderReactRoot} from './utils/renderReactRoot';
 export {
@@ -61,6 +68,8 @@ export {
   wrapInteractionHandler as _wrapInteractionHandler,
 } from './ui/Tracked';
 
+export {DataFormatter} from './ui/DataFormatter';
+
 export {sleep} from './utils/sleep';
 export {
   LogTypes,
@@ -69,6 +78,19 @@ export {
   useLogger,
   _LoggerContext,
 } from './utils/Logger';
+export {Idler} from './utils/Idler';
+
+export {createDataSource, DataSource} from './state/DataSource';
+
+export {DataTable, DataTableColumn} from './ui/datatable/DataTable';
+export {DataTableManager} from './ui/datatable/DataTableManager';
+
+export {
+  Interactive as _Interactive,
+  InteractiveProps as _InteractiveProps,
+} from './ui/Interactive';
+
+export {useMemoize} from './utils/useMemoize';
 
 // It's not ideal that this exists in flipper-plugin sources directly,
 // but is the least pain for plugin authors.

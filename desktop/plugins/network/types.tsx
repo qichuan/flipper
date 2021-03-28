@@ -70,6 +70,7 @@ export type Route = {
   responseData: string;
   responseHeaders: {[id: string]: Header};
   responseStatus: string;
+  enabled: boolean;
 };
 
 export type MockRoute = {
@@ -78,15 +79,12 @@ export type MockRoute = {
   data: string;
   headers: Header[];
   status: string;
+  enabled: boolean;
 };
 
-export type PersistedState = {
-  requests: {[id: string]: Request};
-  responses: {[id: string]: Response};
-  partialResponses: {
-    [id: string]: {
-      initialResponse?: Response;
-      followupChunks: {[id: number]: string};
-    };
+export type PartialResponses = {
+  [id: string]: {
+    initialResponse?: Response;
+    followupChunks: {[id: number]: string};
   };
 };

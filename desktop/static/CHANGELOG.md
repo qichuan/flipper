@@ -1,3 +1,56 @@
+# 0.82.0 (25/3/2021)
+
+ * [D27188241](https://github.com/facebook/flipper/search?q=D27188241&type=Commits) -  Restored the possibility to use Regex in logs search
+ * [D27233899](https://github.com/facebook/flipper/search?q=D27233899&type=Commits) -  Layout.Top / Left / Bottom / Right now support a resizable option
+ * [D27302961](https://github.com/facebook/flipper/search?q=D27302961&type=Commits) -  Fixed an issue where Flipper would crash when decoding large partial requests.
+
+
+# 0.81.0 (17/3/2021)
+
+ * [D26947007](https://github.com/facebook/flipper/search?q=D26947007&type=Commits) -  The new logs plugin will linkify urls and pretty print json-like messages
+ * [D27044507](https://github.com/facebook/flipper/search?q=D27044507&type=Commits) -  Crash reporter will now report errors triggered from the device / client plugins by default. This can be disabled in settings.
+ * [D27047041](https://github.com/facebook/flipper/search?q=D27047041&type=Commits) -  Flipper will now use less CPU if logs & crash reporter plugins are disabled by no longer tailing adb logcat.
+ * [D27048528](https://github.com/facebook/flipper/search?q=D27048528&type=Commits) -  The device logs plugin has been fully rewritten. It is faster and more reponsive, formats urls and json, and supports line wrapping and text selection. Beyond that it is now possible to sort and filter on all columns and pause and resume the log stream.
+
+
+# 0.79.0 (3/3/2021)
+
+ * [D26749214](https://github.com/facebook/flipper/search?q=D26749214&type=Commits) -  Fix a crash when disconnecting metro devices
+
+
+# 0.78.0 (26/2/2021)
+
+ * [D26664846](https://github.com/facebook/flipper/search?q=D26664846&type=Commits) -  fixed possible crash on startup after updating from a previous Flipper version to 0.77.0
+ * [D26690516](https://github.com/facebook/flipper/search?q=D26690516&type=Commits) -  Fixed an issue where device plugins targeting the host device didn't show up without connected clients.
+ * [D26691046](https://github.com/facebook/flipper/search?q=D26691046&type=Commits) -  Flipper will no automatically select any newly connected client
+
+
+# 0.76.0 (18/2/2021)
+
+ * [D26337377](https://github.com/facebook/flipper/search?q=D26337377&type=Commits) -  It is now possible to disable and uninstall device plugins if some of them not required
+ * [D26225203](https://github.com/facebook/flipper/search?q=D26225203&type=Commits) -  Android video is now always captured in 1280x720 / 720x1280 to avoid the issue when video cannot be captured because of unsupported resolution (err=-38)
+
+
+# 0.75.1 (12/2/2021)
+
+ * [D26370235](https://github.com/facebook/flipper/search?q=D26370235&type=Commits) -  Reduce spamminess of iOS connection warnings
+
+
+# 0.75.0 (10/2/2021)
+
+ * [D26249575](https://github.com/facebook/flipper/search?q=D26249575&type=Commits) -  CPU plugin will no longer show up for archived devices
+ * [D26224310](https://github.com/facebook/flipper/search?q=D26224310&type=Commits) -  iOS and Android devices will preserve their state after being disconnected
+ * [D26224677](https://github.com/facebook/flipper/search?q=D26224677&type=Commits) -  Clients will retain their state after being disconnected, until they reconnect again
+ * [D26250894](https://github.com/facebook/flipper/search?q=D26250894&type=Commits) -  It is now possible to create a Flipper trace for disconnected devices and apps
+ * [D26250896](https://github.com/facebook/flipper/search?q=D26250896&type=Commits) -  If a new client connects, Flipper will try to focus on it
+ * [D26250897](https://github.com/facebook/flipper/search?q=D26250897&type=Commits) -  Fixed an issue where data that arrived in the background was not part of the generated Flipper export.
+
+
+# 0.73.0 (28/1/2021)
+
+ * [D26072928](https://github.com/facebook/flipper/search?q=D26072928&type=Commits) -  [Network] Mock routes can now be imported and exported. Thanks @bizzguy!
+
+
 # 0.70.0 (6/1/2021)
 
  * [D25466557](https://github.com/facebook/flipper/search?q=D25466557&type=Commits) -  [Internal]
@@ -41,7 +94,7 @@
 
 # 0.59.0 (29/9/2020)
 
- * [D23908151](https://github.com/facebook/flipper/search?q=D23908151&type=Commits) - 
+ * [D23908151](https://github.com/facebook/flipper/search?q=D23908151&type=Commits) -
  * [D23729972](https://github.com/facebook/flipper/search?q=D23729972&type=Commits) -  Ability to reload single auto-updated plugin without full Flipper restart.
 
 

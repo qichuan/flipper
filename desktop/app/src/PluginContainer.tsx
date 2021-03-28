@@ -12,7 +12,6 @@ import {
   FlipperDevicePlugin,
   Props as PluginProps,
   PluginDefinition,
-  isSandyPlugin,
 } from './plugin';
 import {Logger} from './fb-interfaces/Logger';
 import BaseDevice from './devices/BaseDevice';
@@ -32,9 +31,9 @@ import {
 import {
   StaticView,
   setStaticView,
-  pluginIsStarred,
-  starPlugin,
+  isPluginEnabled,
 } from './reducers/connections';
+import {switchPlugin} from './reducers/pluginManager';
 import React, {PureComponent} from 'react';
 import {connect, ReactReduxContext} from 'react-redux';
 import {setPluginState} from './reducers/pluginStates';
@@ -43,17 +42,16 @@ import {selectPlugin} from './reducers/connections';
 import {State as Store, MiddlewareAPI} from './reducers/index';
 import {activateMenuItems} from './MenuBar';
 import {Message} from './reducers/pluginMessageQueue';
-import {Idler} from './utils/Idler';
+import {IdlerImpl} from './utils/Idler';
 import {processMessageQueue} from './utils/messageQueue';
 import {ToggleButton, SmallText, Layout} from './ui';
 import {theme, TrackingScope, _SandyPluginRenderer} from 'flipper-plugin';
-import {isDevicePluginDefinition} from './utils/pluginUtils';
-import ArchivedDevice from './devices/ArchivedDevice';
+import {isDevicePluginDefinition, isSandyPlugin} from './utils/pluginUtils';
 import {ContentContainer} from './sandy-chrome/ContentContainer';
 import {Alert, Typography} from 'antd';
 import {InstalledPluginDetails} from 'plugin-lib';
 import semver from 'semver';
-import {activatePlugin} from './reducers/pluginManager';
+import {loadPlugin} from './reducers/pluginManager';
 import {produce} from 'immer';
 import {reportUsage} from './utils/metrics';
 
@@ -128,8 +126,8 @@ type DispatchFromProps = {
   }) => any;
   setPluginState: (payload: {pluginKey: string; state: any}) => void;
   setStaticView: (payload: StaticView) => void;
-  starPlugin: typeof starPlugin;
-  activatePlugin: typeof activatePlugin;
+  enablePlugin: typeof switchPlugin;
+  loadPlugin: typeof loadPlugin;
 };
 
 type Props = StateFromProps & DispatchFromProps & OwnProps;
@@ -173,7 +171,7 @@ class PluginContainer extends PureComponent<Props, State> {
     }
   };
 
-  idler?: Idler;
+  idler?: IdlerImpl;
   pluginBeingProcessed: string | null = null;
 
   state = {
@@ -237,7 +235,7 @@ class PluginContainer extends PureComponent<Props, State> {
         pendingMessages?.length
       ) {
         const start = Date.now();
-        this.idler = new Idler();
+        this.idler = new IdlerImpl();
         processMessageQueue(
           isSandyPlugin(activePlugin)
             ? target.sandyPluginStates.get(activePlugin.id)!
@@ -316,9 +314,9 @@ class PluginContainer extends PureComponent<Props, State> {
             <ToggleButton
               toggled={false}
               onClick={() => {
-                this.props.starPlugin({
+                this.props.enablePlugin({
                   plugin: activePlugin,
-                  selectedApp: (this.props.target as Client).query.app,
+                  selectedApp: (this.props.target as Client)?.query?.app,
                 });
               }}
               large
@@ -381,7 +379,7 @@ class PluginContainer extends PureComponent<Props, State> {
   }
 
   reloadPlugin() {
-    const {activatePlugin, latestInstalledVersion} = this.props;
+    const {loadPlugin, latestInstalledVersion} = this.props;
     if (latestInstalledVersion) {
       reportUsage(
         'plugin-auto-update:alert:reloadClicked',
@@ -390,7 +388,7 @@ class PluginContainer extends PureComponent<Props, State> {
         },
         latestInstalledVersion.id,
       );
-      activatePlugin({
+      loadPlugin({
         plugin: latestInstalledVersion,
         enable: false,
         notifyIfFailed: true,
@@ -498,9 +496,9 @@ class PluginContainer extends PureComponent<Props, State> {
               message={
                 <Text>
                   Plugin "{activePlugin.title}" v
-                  {latestInstalledVersion?.version} downloaded and ready to
+                  {latestInstalledVersion?.version} is downloaded and ready to
                   install. <Link onClick={this.reloadPlugin}>Reload</Link> to
-                  start using new version.
+                  start using the new version.
                 </Text>
               }
               type="info"
@@ -553,11 +551,11 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
       selectedApp,
       clients,
       deepLinkPayload,
-      userStarredPlugins,
+      enabledPlugins,
+      enabledDevicePlugins,
     },
     pluginStates,
-    plugins: {devicePlugins, clientPlugins},
-    pluginManager: {installedPlugins},
+    plugins: {devicePlugins, clientPlugins, installedPlugins},
     pluginMessageQueue,
     settingsState,
   }) => {
@@ -568,27 +566,29 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
 
     if (selectedPlugin) {
       activePlugin = devicePlugins.get(selectedPlugin);
-      target = selectedDevice;
       if (selectedDevice && activePlugin) {
+        target = selectedDevice;
         pluginKey = getPluginKey(selectedDevice.serial, activePlugin.id);
-        pluginIsEnabled = true;
       } else {
         target =
           clients.find((client: Client) => client.id === selectedApp) || null;
         activePlugin = clientPlugins.get(selectedPlugin);
         if (activePlugin && target) {
           pluginKey = getPluginKey(target.id, activePlugin.id);
-          pluginIsEnabled = pluginIsStarred(
-            userStarredPlugins,
-            selectedApp,
-            activePlugin.id,
-          );
         }
       }
+      pluginIsEnabled =
+        activePlugin !== undefined &&
+        isPluginEnabled(
+          enabledPlugins,
+          enabledDevicePlugins,
+          selectedApp,
+          activePlugin.id,
+        );
     }
     const isArchivedDevice = !selectedDevice
       ? false
-      : selectedDevice instanceof ArchivedDevice;
+      : selectedDevice.isArchived;
     if (isArchivedDevice) {
       pluginIsEnabled = true;
     }
@@ -618,7 +618,7 @@ export default connect<StateFromProps, DispatchFromProps, OwnProps, Store>(
     setPluginState,
     selectPlugin,
     setStaticView,
-    starPlugin,
-    activatePlugin,
+    enablePlugin: switchPlugin,
+    loadPlugin,
   },
 )(PluginContainer);

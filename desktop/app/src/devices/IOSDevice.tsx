@@ -19,6 +19,7 @@ import path from 'path';
 import {promisify} from 'util';
 import {exec} from 'child_process';
 import {default as promiseTimeout} from '../utils/promiseTimeout';
+import {IOSBridge} from '../utils/IOSBridge';
 
 type IOSLogLevel = 'Default' | 'Info' | 'Debug' | 'Error' | 'Fault';
 
@@ -40,19 +41,28 @@ type RawLogEntry = {
 };
 
 export default class IOSDevice extends BaseDevice {
-  log: any;
+  log?: child_process.ChildProcessWithoutNullStreams;
   buffer: string;
   private recordingProcess?: ChildProcess;
   private recordingLocation?: string;
+  private iOSBridge: IOSBridge;
 
-  constructor(serial: string, deviceType: DeviceType, title: string) {
+  constructor(
+    iOSBridge: IOSBridge,
+    serial: string,
+    deviceType: DeviceType,
+    title: string,
+  ) {
     super(serial, deviceType, title, 'iOS');
-    this.icon = 'icons/ios.svg';
+    this.icon = 'mobile';
     this.buffer = '';
-    this.log = this.startLogListener();
+    this.iOSBridge = iOSBridge;
   }
 
-  screenshot(): Promise<Buffer> {
+  async screenshot(): Promise<Buffer> {
+    if (!this.connected.get()) {
+      return Buffer.from([]);
+    }
     const tmpImageName = uuid() + '.png';
     const tmpDirectory = (electron.app || electron.remote.app).getPath('temp');
     const tmpFilePath = path.join(tmpDirectory, tmpImageName);
@@ -72,71 +82,50 @@ export default class IOSDevice extends BaseDevice {
     exec(command);
   }
 
-  teardown() {
-    if (this.log) {
-      this.log.kill();
-    }
+  startLogging() {
+    this.startLogListener(this.iOSBridge);
   }
 
-  startLogListener(retries: number = 3) {
-    if (this.deviceType === 'physical') {
-      return;
-    }
+  stopLogging() {
+    this.log?.kill();
+  }
+
+  startLogListener(iOSBridge: IOSBridge, retries: number = 3) {
     if (retries === 0) {
-      console.error('Attaching iOS log listener continuously failed.');
+      console.warn('Attaching iOS log listener continuously failed.');
       return;
     }
-    if (!this.log) {
-      const deviceSetPath = process.env.DEVICE_SET_PATH
-        ? ['--set', process.env.DEVICE_SET_PATH]
-        : [];
 
-      this.log = child_process.spawn(
-        'xcrun',
-        [
-          'simctl',
-          ...deviceSetPath,
-          'spawn',
-          this.serial,
-          'log',
-          'stream',
-          '--style',
-          'json',
-          '--predicate',
-          'senderImagePath contains "Containers"',
-          '--info',
-          '--debug',
-        ],
-        {},
-      );
-
+    const logListener = iOSBridge.startLogListener;
+    if (!this.log && logListener) {
+      this.log = logListener(this.serial);
       this.log.on('error', (err: Error) => {
-        console.error(err);
+        console.error('iOS log tailer error', err);
       });
 
       this.log.stderr.on('data', (data: Buffer) => {
-        console.error(data.toString());
+        console.warn('iOS log tailer stderr: ', data.toString());
       });
 
       this.log.on('exit', () => {
-        this.log = null;
+        this.log = undefined;
       });
-    }
 
-    try {
-      this.log.stdout
-        .pipe(new StripLogPrefix())
-        .pipe(JSONStream.parse('*'))
-        .on('data', (data: RawLogEntry) => {
-          const entry = IOSDevice.parseLogEntry(data);
-          this.addLogEntry(entry);
-        });
-    } catch (e) {
-      console.error('Could not parse iOS log stream.', e);
-      // restart log stream
-      this.log.kill();
-      this.log = null;
-      this.startLogListener(retries - 1);
+      try {
+        this.log.stdout
+          .pipe(new StripLogPrefix())
+          .pipe(JSONStream.parse('*'))
+          .on('data', (data: RawLogEntry) => {
+            const entry = IOSDevice.parseLogEntry(data);
+            this.addLogEntry(entry);
+          });
+      } catch (e) {
+        console.error('Could not parse iOS log stream.', e);
+        // restart log stream
+        this.log.kill();
+        this.log = undefined;
+        this.startLogListener(iOSBridge, retries - 1);
+      }
     }
   }
 
@@ -180,7 +169,7 @@ export default class IOSDevice extends BaseDevice {
   }
 
   async screenCaptureAvailable() {
-    return this.deviceType === 'emulator';
+    return this.deviceType === 'emulator' && this.connected.get();
   }
 
   async startScreenCapture(destination: string) {
@@ -220,6 +209,11 @@ export default class IOSDevice extends BaseDevice {
       return output;
     }
     return null;
+  }
+
+  disconnect() {
+    this.stopScreenCapture();
+    super.disconnect();
   }
 }
 

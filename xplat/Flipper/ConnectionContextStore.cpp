@@ -10,6 +10,7 @@
 #include <folly/portability/SysStat.h>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include "CertificateUtils.h"
 #include "Log.h"
 
@@ -36,8 +37,10 @@ bool ConnectionContextStore::hasRequiredFiles() {
       loadStringFromFile(absoluteFilePath(CLIENT_CERT_FILE_NAME));
   std::string privateKey =
       loadStringFromFile(absoluteFilePath(PRIVATE_KEY_FILE));
+  std::string config =
+      loadStringFromFile(absoluteFilePath(CONNECTION_CONFIG_FILE));
 
-  if (caCert == "" || clientCert == "" || privateKey == "") {
+  if (caCert == "" || clientCert == "" || privateKey == "" || config == "") {
     return false;
   }
   return true;
@@ -124,11 +127,12 @@ bool ConnectionContextStore::resetState() {
     int ret = mkdir(dirPath.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
     return ret == 0;
   } else if (info.st_mode & S_IFDIR) {
-    for (auto file : {CSR_FILE_NAME,
-                      FLIPPER_CA_FILE_NAME,
-                      CLIENT_CERT_FILE_NAME,
-                      PRIVATE_KEY_FILE,
-                      CONNECTION_CONFIG_FILE}) {
+    for (auto file :
+         {CSR_FILE_NAME,
+          FLIPPER_CA_FILE_NAME,
+          CLIENT_CERT_FILE_NAME,
+          PRIVATE_KEY_FILE,
+          CONNECTION_CONFIG_FILE}) {
       std::remove(absoluteFilePath(file).c_str());
     }
     return true;

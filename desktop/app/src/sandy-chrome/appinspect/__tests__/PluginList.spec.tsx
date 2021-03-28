@@ -11,24 +11,27 @@ import {
   createMockFlipperWithPlugin,
   MockFlipperResult,
 } from '../../../test-utils/createMockFlipperWithPlugin';
-import {computePluginLists} from '../PluginList';
 import {findBestClient, findBestDevice, findMetroDevice} from '../AppInspect';
 import {FlipperPlugin} from '../../../plugin';
 import MetroDevice from '../../../devices/MetroDevice';
 import BaseDevice from '../../../devices/BaseDevice';
 import {_SandyPluginDefinition} from 'flipper-plugin';
-import {createMockPluginDetails} from 'flipper-plugin/src/test-utils/test-utils';
-import {selectPlugin, starPlugin} from '../../../reducers/connections';
+import {TestUtils} from 'flipper-plugin';
+import {selectPlugin} from '../../../reducers/connections';
 import {registerMetroDevice} from '../../../dispatcher/metroDevice';
 import {
   addGatekeepedPlugins,
   registerMarketplacePlugins,
   registerPlugins,
 } from '../../../reducers/plugins';
+import {switchPlugin} from '../../../reducers/pluginManager';
 
 // eslint-disable-next-line
 import * as LogsPluginModule from '../../../../../plugins/logs/index';
 import {createMockDownloadablePluginDetails} from '../../../utils/testUtils';
+import {computePluginLists} from '../../../utils/pluginUtils';
+
+const createMockPluginDetails = TestUtils.createMockPluginDetails;
 
 const logsPlugin = new _SandyPluginDefinition(
   createMockPluginDetails({id: 'DeviceLogs'}),
@@ -87,12 +90,18 @@ describe('basic findBestDevice with metro present', () => {
 
   beforeEach(async () => {
     flipper = await createMockFlipperWithPlugin(logsPlugin);
+    flipper.device.supportsPlugin = (p) => {
+      return p.id !== 'unsupportedDevicePlugin';
+    };
     testDevice = flipper.device;
     // flipper.store.dispatch(registerPlugins([LogsPlugin]))
     await registerMetroDevice(undefined, flipper.store, flipper.logger);
     metro = findMetroDevice(
       flipper.store.getState().connections.devices,
     )! as MetroDevice;
+    metro.supportsPlugin = (p) => {
+      return p.id !== 'unsupportedDevicePlugin';
+    };
   });
 
   test('findMetroDevice', () => {
@@ -165,7 +174,8 @@ describe('basic findBestDevice with metro present', () => {
         metro,
         flipper.client,
         state.plugins,
-        state.connections.userStarredPlugins,
+        state.connections.enabledPlugins,
+        state.connections.enabledDevicePlugins,
       ),
     ).toEqual({
       downloadablePlugins: [],
@@ -276,7 +286,8 @@ describe('basic findBestDevice with metro present', () => {
       metro,
       flipper.client,
       state.plugins,
-      state.connections.userStarredPlugins,
+      state.connections.enabledPlugins,
+      state.connections.enabledDevicePlugins,
     );
     expect(pluginLists).toEqual({
       devicePlugins: [logsPlugin],
@@ -290,22 +301,22 @@ describe('basic findBestDevice with metro present', () => {
         ],
         [
           unsupportedDevicePlugin.details,
-          "Device plugin 'Unsupported Device Plugin' is not supported by the current device type.",
+          "Device plugin 'Unsupported Device Plugin' is not supported by the currently connected device.",
         ],
         [
           unsupportedPlugin.details,
-          "Plugin 'Unsupported Plugin' is installed in Flipper, but not supported by the client application",
+          "Plugin 'Unsupported Plugin' is not supported by the client application",
         ],
         [
           unsupportedDownloadablePlugin,
-          "Plugin 'Unsupported Uninstalled Plugin' is not installed in Flipper and not supported by the client application",
+          "Plugin 'Unsupported Uninstalled Plugin' is not supported by the client application and not installed in Flipper",
         ],
       ],
       downloadablePlugins: [supportedDownloadablePlugin],
     });
 
     flipper.store.dispatch(
-      starPlugin({
+      switchPlugin({
         plugin: plugin2,
         selectedApp: flipper.client.query.app,
       }),
@@ -317,7 +328,8 @@ describe('basic findBestDevice with metro present', () => {
         metro,
         flipper.client,
         state.plugins,
-        state.connections.userStarredPlugins,
+        state.connections.enabledPlugins,
+        state.connections.enabledDevicePlugins,
       ),
     ).toMatchObject({
       enabledPlugins: [plugin2],

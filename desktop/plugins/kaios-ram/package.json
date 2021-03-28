@@ -3,6 +3,15 @@
   "name": "flipper-plugin-kaios-graphs",
   "id": "kaios-graphs",
   "version": "0.0.0",
+  "pluginType": "device",
+  "supportedDevices": [
+    {
+      "os": "Android",
+      "specs": [
+        "KaiOS"
+      ]
+    }
+  ],
   "main": "dist/bundle.js",
   "flipperBundlerEntry": "index.tsx",
   "license": "MIT",
@@ -17,10 +26,10 @@
   },
   "dependencies": {
     "promisify-child-process": "^4.1.0",
-    "recharts": "1.7.1"
+    "recharts": "2.0.9"
   },
   "devDependencies": {
-    "@types/recharts": "1.8.18"
+    "@types/recharts": "1.8.19"
   },
   "resolutions": {
     "@types/react": "16.9.17"

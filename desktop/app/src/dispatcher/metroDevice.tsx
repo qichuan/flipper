@@ -9,11 +9,10 @@
 
 import {Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
-import {registerDeviceCallbackOnPlugins} from '../utils/onRegisterDevice';
 import MetroDevice from '../devices/MetroDevice';
-import ArchivedDevice from '../devices/ArchivedDevice';
 import http from 'http';
 import {addErrorNotification} from '../reducers/notifications';
+import {destroyDevice} from '../reducers/connections';
 
 const METRO_PORT = 8081;
 const METRO_HOST = 'localhost';
@@ -39,7 +38,7 @@ async function isMetroRunning(): Promise<boolean> {
           });
       })
       .on('error', (err: any) => {
-        if (err.code !== 'ECONNREFUSED') {
+        if (err.code !== 'ECONNREFUSED' && err.code !== 'ECONNRESET') {
           console.error('Could not connect to METRO ' + err);
         }
         resolve(false);
@@ -58,47 +57,15 @@ export async function registerMetroDevice(
     name: metroDevice.title,
   });
 
-  metroDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
+  metroDevice.loadDevicePlugins(
+    store.getState().plugins.devicePlugins,
+    store.getState().connections.enabledDevicePlugins,
+  );
   store.dispatch({
     type: 'REGISTER_DEVICE',
     payload: metroDevice,
     serial: METRO_URL,
   });
-
-  registerDeviceCallbackOnPlugins(
-    store,
-    store.getState().plugins.devicePlugins,
-    store.getState().plugins.clientPlugins,
-    metroDevice,
-  );
-}
-
-async function unregisterDevices(store: Store, logger: Logger) {
-  logger.track('usage', 'unregister-device', {
-    os: 'Metro',
-    serial: METRO_URL,
-  });
-
-  let archivedDevice: ArchivedDevice | undefined = undefined;
-  const device = store
-    .getState()
-    .connections.devices.find((device) => device.serial === METRO_URL);
-  if (device && !device.isArchived) {
-    archivedDevice = device.archive();
-  }
-
-  store.dispatch({
-    type: 'UNREGISTER_DEVICES',
-    payload: new Set([METRO_URL]),
-  });
-
-  if (archivedDevice) {
-    archivedDevice.loadDevicePlugins(store.getState().plugins.devicePlugins);
-    store.dispatch({
-      type: 'REGISTER_DEVICE',
-      payload: archivedDevice,
-    });
-  }
 }
 
 export default (store: Store, logger: Logger) => {
@@ -125,7 +92,7 @@ export default (store: Store, logger: Logger) => {
           unregistered = true;
           clearTimeout(guard);
           ws = undefined;
-          unregisterDevices(store, logger);
+          destroyDevice(store, logger, METRO_URL);
           scheduleNext();
         }
       };

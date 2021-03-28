@@ -18,26 +18,29 @@ import {
   DownloadOutlined,
 } from '@ant-design/icons';
 import {Glyph, Layout, styled} from '../../ui';
-import {theme, NUX, Tracked} from 'flipper-plugin';
+import {theme, NUX, Tracked, useValue, useMemoize} from 'flipper-plugin';
 import {useDispatch, useStore} from '../../utils/useStore';
-import {getPluginTitle, sortPluginsByName} from '../../utils/pluginUtils';
-import {ClientPluginDefinition, DevicePluginDefinition} from '../../plugin';
-import {selectPlugin, starPlugin} from '../../reducers/connections';
+import {
+  computePluginLists,
+  getPluginTitle,
+  getPluginTooltip,
+} from '../../utils/pluginUtils';
+import {selectPlugin} from '../../reducers/connections';
 import Client from '../../Client';
-import {State} from '../../reducers';
 import BaseDevice from '../../devices/BaseDevice';
-import {getFavoritePlugins} from '../../chrome/mainsidebar/sidebarUtils';
-import {PluginDetails, DownloadablePluginDetails} from 'flipper-plugin-lib';
-import {useMemoize} from '../../utils/useMemoize';
+import {DownloadablePluginDetails} from 'flipper-plugin-lib';
 import MetroDevice from '../../devices/MetroDevice';
 import {
   DownloadablePluginState,
   PluginDownloadStatus,
   startPluginDownload,
 } from '../../reducers/pluginDownloads';
-import {activatePlugin, uninstallPlugin} from '../../reducers/pluginManager';
+import {
+  loadPlugin,
+  switchPlugin,
+  uninstallPlugin,
+} from '../../reducers/pluginManager';
 import {BundledPluginDetails} from 'plugin-lib';
-import {filterNewestVersionOfEachPlugin} from '../../dispatcher/plugins';
 import {reportUsage} from '../../utils/metrics';
 
 const {SubMenu} = Menu;
@@ -82,10 +85,13 @@ export const PluginList = memo(function PluginList({
     metroDevice,
     client,
     plugins,
-    connections.userStarredPlugins,
+    connections.enabledPlugins,
+    connections.enabledDevicePlugins,
     pluginsChanged,
   ]);
-  const isArchived = !!activeDevice?.isArchived;
+  const isConnected = useValue(activeDevice?.connected, false);
+  const metroConnected = useValue(metroDevice?.connected, false);
+  const isArchived = activeDevice?.isArchived;
 
   const annotatedDownloadablePlugins = useMemoize<
     [
@@ -135,23 +141,25 @@ export const PluginList = memo(function PluginList({
     },
     [dispatch, metroDevice, connections.selectedApp],
   );
-  const handleStarPlugin = useCallback(
+  const handleEnablePlugin = useCallback(
     (id: string) => {
+      const plugin = (plugins.clientPlugins.get(id) ??
+        plugins.devicePlugins.get(id))!;
       dispatch(
-        starPlugin({
-          selectedApp: client!.query.app,
-          plugin: plugins.clientPlugins.get(id)!,
+        switchPlugin({
+          selectedApp: client?.query.app,
+          plugin,
         }),
       );
     },
-    [client, plugins.clientPlugins, dispatch],
+    [client, plugins.clientPlugins, plugins.devicePlugins, dispatch],
   );
   const handleInstallPlugin = useCallback(
     (id: string) => {
       const plugin = downloadablePlugins.find((p) => p.id === id)!;
       reportUsage('plugin:install', {version: plugin.version}, plugin.id);
       if (plugin.isBundled) {
-        dispatch(activatePlugin({plugin, enable: true, notifyIfFailed: true}));
+        dispatch(loadPlugin({plugin, enable: true, notifyIfFailed: true}));
       } else {
         dispatch(startPluginDownload({plugin, startedByUser: true}));
       }
@@ -162,7 +170,7 @@ export const PluginList = memo(function PluginList({
     (id: string) => {
       const plugin = disabledPlugins.find((p) => p.id === id)!;
       reportUsage('plugin:uninstall', {version: plugin.version}, plugin.id);
-      dispatch(uninstallPlugin(plugin));
+      dispatch(uninstallPlugin({plugin}));
     },
     [disabledPlugins, dispatch],
   );
@@ -194,11 +202,23 @@ export const PluginList = memo(function PluginList({
                 }
                 onClick={handleAppPluginClick}
                 tooltip={getPluginTooltip(plugin.details)}
+                actions={
+                  isArchived ? null : (
+                    <ActionButton
+                      id={plugin.id}
+                      onClick={handleEnablePlugin}
+                      title="Disable plugin"
+                      icon={
+                        <MinusOutlined size={16} style={{marginRight: 0}} />
+                      }
+                    />
+                  )
+                }
               />
             ))}
           </PluginGroup>
 
-          {!isArchived && (
+          {!isArchived && metroConnected && (
             <PluginGroup
               key="metro"
               title="React Native"
@@ -226,21 +246,21 @@ export const PluginList = memo(function PluginList({
                 onClick={handleAppPluginClick}
                 tooltip={getPluginTooltip(plugin.details)}
                 actions={
-                  isArchived ? null : (
+                  isConnected ? (
                     <ActionButton
                       id={plugin.id}
-                      onClick={handleStarPlugin}
+                      onClick={handleEnablePlugin}
                       title="Disable plugin"
                       icon={
                         <MinusOutlined size={16} style={{marginRight: 0}} />
                       }
                     />
-                  )
+                  ) : null
                 }
               />
             ))}
           </PluginGroup>
-          {!isArchived && (
+          {isConnected && (
             <PluginGroup
               key="disabled"
               title="Disabled"
@@ -264,7 +284,7 @@ export const PluginList = memo(function PluginList({
                       <ActionButton
                         id={plugin.id}
                         title="Enable plugin"
-                        onClick={handleStarPlugin}
+                        onClick={handleEnablePlugin}
                         icon={
                           <PlusOutlined size={16} style={{marginRight: 0}} />
                         }
@@ -305,7 +325,7 @@ export const PluginList = memo(function PluginList({
               />
             ))}
           </PluginGroup>
-          {!isArchived && (
+          {isConnected && (
             <PluginGroup
               key="unavailable"
               title="Unavailable plugins"
@@ -462,132 +482,6 @@ const PluginGroup = memo(function PluginGroup({
   );
 });
 
-function getPluginTooltip(details: PluginDetails): string {
-  return `${getPluginTitle(details)} (${details.id}@${details.version}) ${
-    details.description ?? ''
-  }`;
-}
-
-export function computePluginLists(
-  device: BaseDevice | undefined,
-  metroDevice: BaseDevice | undefined,
-  client: Client | undefined,
-  plugins: State['plugins'],
-  userStarredPlugins: State['connections']['userStarredPlugins'],
-  _pluginsChanged?: number, // this argument is purely used to invalidate the memoization cache
-) {
-  const devicePlugins: DevicePluginDefinition[] =
-    device?.devicePlugins.map((name) => plugins.devicePlugins.get(name)!) ?? [];
-  const metroPlugins: DevicePluginDefinition[] =
-    metroDevice?.devicePlugins.map(
-      (name) => plugins.devicePlugins.get(name)!,
-    ) ?? [];
-  const enabledPlugins: ClientPluginDefinition[] = [];
-  const disabledPlugins: ClientPluginDefinition[] = [];
-  const unavailablePlugins: [plugin: PluginDetails, reason: string][] = [];
-  const downloadablePlugins: (
-    | DownloadablePluginDetails
-    | BundledPluginDetails
-  )[] = [];
-
-  if (device) {
-    // find all device plugins that aren't part of the current device / metro
-    const detectedDevicePlugins = new Set([
-      ...device.devicePlugins,
-      ...(metroDevice?.devicePlugins ?? []),
-    ]);
-    for (const [name, definition] of plugins.devicePlugins.entries()) {
-      if (!detectedDevicePlugins.has(name)) {
-        unavailablePlugins.push([
-          definition.details,
-          `Device plugin '${getPluginTitle(
-            definition.details,
-          )}' is not supported by the current device type.`,
-        ]);
-      }
-    }
-  }
-
-  // process problematic plugins
-  plugins.disabledPlugins.forEach((plugin) => {
-    unavailablePlugins.push([plugin, 'Plugin is disabled by configuration']);
-  });
-  plugins.gatekeepedPlugins.forEach((plugin) => {
-    unavailablePlugins.push([
-      plugin,
-      `This plugin is only available to members of gatekeeper '${plugin.gatekeeper}'`,
-    ]);
-  });
-  plugins.failedPlugins.forEach(([plugin, error]) => {
-    unavailablePlugins.push([
-      plugin,
-      `Flipper failed to load this plugin: '${error}'`,
-    ]);
-  });
-
-  // process all client plugins
-  if (device && client) {
-    const clientPlugins = Array.from(plugins.clientPlugins.values()).sort(
-      sortPluginsByName,
-    );
-    const favoritePlugins = getFavoritePlugins(
-      device,
-      client,
-      clientPlugins,
-      client && userStarredPlugins[client.query.app],
-      true,
-    );
-    clientPlugins.forEach((plugin) => {
-      if (!client.supportsPlugin(plugin.id)) {
-        unavailablePlugins.push([
-          plugin.details,
-          `Plugin '${getPluginTitle(
-            plugin.details,
-          )}' is installed in Flipper, but not supported by the client application`,
-        ]);
-      } else if (favoritePlugins.includes(plugin)) {
-        enabledPlugins.push(plugin);
-      } else {
-        disabledPlugins.push(plugin);
-      }
-    });
-    const uninstalledMarketplacePlugins = filterNewestVersionOfEachPlugin(
-      [...plugins.bundledPlugins.values()],
-      plugins.marketplacePlugins,
-    ).filter((p) => !plugins.loadedPlugins.has(p.id));
-    uninstalledMarketplacePlugins.forEach((plugin) => {
-      if (client.supportsPlugin(plugin.id)) {
-        downloadablePlugins.push(plugin);
-      } else {
-        unavailablePlugins.push([
-          plugin,
-          `Plugin '${getPluginTitle(
-            plugin,
-          )}' is not installed in Flipper and not supported by the client application`,
-        ]);
-      }
-    });
-  }
-
-  devicePlugins.sort(sortPluginsByName);
-  metroPlugins.sort(sortPluginsByName);
-  unavailablePlugins.sort(([a], [b]) => {
-    return getPluginTitle(a) > getPluginTitle(b) ? 1 : -1;
-  });
-  downloadablePlugins.sort((a, b) => {
-    return getPluginTitle(a) > getPluginTitle(b) ? 1 : -1;
-  });
-
-  return {
-    devicePlugins,
-    metroPlugins,
-    enabledPlugins,
-    disabledPlugins,
-    unavailablePlugins,
-    downloadablePlugins,
-  };
-}
-
 // Dimensions are hardcoded as they correlate strongly
 const PluginMenu = styled(Menu)({
   userSelect: 'none',
@@ -595,6 +489,9 @@ const PluginMenu = styled(Menu)({
   '.ant-typography': {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  },
+  '.ant-menu-sub.ant-menu-inline': {
+    background: theme.backgroundDefault,
   },
   '.ant-menu-inline .ant-menu-item, .ant-menu-inline .ant-menu-submenu-title ': {
     width: '100%', // reset to remove weird bonus pixel from ANT
@@ -624,8 +521,9 @@ const PluginMenu = styled(Menu)({
     right: 8,
   },
   '.ant-badge-count': {
-    color: theme.textColorPrimary,
-    background: theme.backgroundTransparentHover,
+    color: theme.textColorSecondary,
+    // border: `1px solid ${theme.dividerColor}`,
+    background: 'transparent',
     fontWeight: 'bold',
     padding: `0 10px`,
     boxShadow: 'none',

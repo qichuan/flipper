@@ -7,9 +7,10 @@
  * @format
  */
 
-import {Notification} from '../plugin';
+import {Notification} from 'flipper-plugin';
 import {Actions} from './';
 import {getStringFromErrorLike} from '../utils';
+
 export type PluginNotification = {
   notification: Notification;
   pluginId: string;
@@ -146,7 +147,7 @@ function activeNotificationsReducer(
 ): State {
   const {payload} = action;
   const newActiveNotifications = [];
-  const newInactivatedNotifications = state.invalidatedNotifications;
+  const newInactivatedNotifications = state.invalidatedNotifications.slice();
 
   const newIDs = new Set(payload.notifications.map((n: Notification) => n.id));
 
@@ -203,7 +204,7 @@ export function addErrorNotification(
   error?: any,
 ): Action {
   // TODO: use this method for https://github.com/facebook/flipper/pull/1478/files as well
-  console.error(title, message, error);
+  console.warn(title, message, error);
   return addNotification({
     client: null,
     pluginId: 'globalError',

@@ -30,18 +30,14 @@ const {version} = require('../package.json');
 
 const dev = process.env.NODE_ENV !== 'production';
 
-// For insiders builds we bundle into them all the device plugins,
-// plus top 10 "universal" plugins starred by more than 100 users.
+// For insiders builds we bundle top 5 popular device plugins,
+// plus top 10 popular "universal" plugins enabled by more than 100 users.
 const hardcodedPlugins = new Set<string>([
-  // Device plugins
+  // Popular device plugins
   'DeviceLogs',
   'CrashReporter',
   'MobileBuilds',
-  'DeviceCPU',
-  'Tracery',
   'Hermesdebuggerrn',
-  'kaios-big-allocations',
-  'kaios-graphs',
   'React',
   // Popular client plugins
   'Inspector',
@@ -66,7 +62,7 @@ export async function generatePluginEntryPoints(
   isInsidersBuild: boolean = false,
 ) {
   console.log(
-    `⚙️  Generating plugin entry points (isInsidersBuils=${isInsidersBuild})...`,
+    `⚙️  Generating plugin entry points (isInsidersBuild=${isInsidersBuild})...`,
   );
   const sourcePlugins = await getSourcePlugins();
   const bundledPlugins = sourcePlugins
@@ -226,10 +222,12 @@ export function buildFolder(): Promise<string> {
     return '';
   });
 }
-export function getVersionNumber(buildNumber: number) {
+export function getVersionNumber(buildNumber?: number) {
   let {version} = require('../package.json');
-  // Unique build number is passed as --version parameter from Sandcastle
-  version = [...version.split('.').slice(0, 2), buildNumber].join('.');
+  if (buildNumber) {
+    // Unique build number is passed as --version parameter from Sandcastle
+    version = [...version.split('.').slice(0, 2), buildNumber].join('.');
+  }
   return version;
 }
 

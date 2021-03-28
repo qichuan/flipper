@@ -10,6 +10,8 @@
 import {SandyPluginDefinition} from './SandyPluginDefinition';
 import {BasePluginInstance, BasePluginClient} from './PluginBase';
 import {FlipperLib} from './FlipperLib';
+import {DeviceType as PluginDeviceType} from 'flipper-plugin-lib';
+import {Atom} from '../state/atom';
 
 export type DeviceLogListener = (entry: DeviceLogEntry) => void;
 
@@ -35,12 +37,14 @@ export type LogLevel =
 export interface Device {
   readonly realDevice: any; // TODO: temporarily, clean up T70688226
   readonly isArchived: boolean;
+  readonly isConnected: boolean;
   readonly os: string;
+  readonly serial: string;
   readonly deviceType: DeviceType;
   onLogEntry(cb: DeviceLogListener): () => void;
 }
 
-export type DeviceType = 'emulator' | 'physical';
+export type DeviceType = PluginDeviceType;
 
 export type DevicePluginPredicate = (device: Device) => boolean;
 
@@ -65,6 +69,7 @@ export interface RealFlipperDevice {
   os: string;
   serial: string;
   isArchived: boolean;
+  connected: Atom<boolean>;
   deviceType: DeviceType;
   addLogListener(callback: DeviceLogListener): Symbol;
   removeLogListener(id: Symbol): void;
@@ -78,15 +83,16 @@ export class SandyDevicePluginInstance extends BasePluginInstance {
   }
 
   /** client that is bound to this instance */
-  client: DevicePluginClient;
+  readonly client: DevicePluginClient;
 
   constructor(
     flipperLib: FlipperLib,
     definition: SandyPluginDefinition,
     realDevice: RealFlipperDevice,
+    pluginKey: string,
     initialStates?: Record<string, any>,
   ) {
-    super(flipperLib, definition, realDevice, initialStates);
+    super(flipperLib, definition, realDevice, pluginKey, initialStates);
     this.client = {
       ...this.createBasePluginClient(),
       isPluginAvailable(pluginId: string) {

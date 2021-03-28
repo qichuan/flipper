@@ -82,6 +82,12 @@ const argv = yargs
       default: false,
       type: 'boolean',
     },
+    'disable-gpu': {
+      describe:
+        'Disable hardware acceleration. Corresponds to FLIPPER_DISABLE_GPU=1.',
+      default: false,
+      type: 'boolean',
+    },
   })
   .version(VERSION)
   .help()
@@ -91,6 +97,11 @@ const {config, configPath} = setup(argv);
 
 if (isFB && process.env.FLIPPER_FB === undefined) {
   process.env.FLIPPER_FB = 'true';
+}
+
+if (argv['disable-gpu'] || process.env.FLIPPER_DISABLE_GPU === '1') {
+  console.warn('Hardware acceleration disabled');
+  app.disableHardwareAcceleration();
 }
 
 process.env.CONFIG = JSON.stringify(config);
@@ -268,8 +279,6 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     center: true,
-    titleBarStyle: 'hiddenInset',
-    vibrancy: 'sidebar',
     webPreferences: {
       enableRemoteModule: true,
       backgroundThrottling: false,
@@ -279,6 +288,7 @@ function createWindow() {
       nodeIntegration: true,
       webviewTag: true,
       nativeWindowOpen: true,
+      contextIsolation: false,
     },
   });
   win.once('ready-to-show', () => {

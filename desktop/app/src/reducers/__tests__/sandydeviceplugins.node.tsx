@@ -9,7 +9,7 @@
 
 import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
 import {Store} from '../../';
-import {selectPlugin} from '../../reducers/connections';
+import {destroyDevice, selectPlugin} from '../../reducers/connections';
 import {
   _SandyPluginDefinition,
   _SandyDevicePluginInstance,
@@ -71,7 +71,6 @@ test('it should initialize device sandy plugins', async () => {
   expect(device.sandyPluginStates.get(TestPlugin.id)).toBeInstanceOf(
     _SandyDevicePluginInstance,
   );
-  expect(TestPlugin.asDevicePluginModule().supportsDevice).toBeCalledTimes(1);
   const instanceApi: PluginApi = device.sandyPluginStates.get(TestPlugin.id)!
     .instanceApi;
 
@@ -88,15 +87,12 @@ test('it should initialize device sandy plugins', async () => {
 });
 
 test('it should cleanup if device is removed', async () => {
-  const {device, store} = await createMockFlipperWithPlugin(TestPlugin);
+  const {device, store, logger} = await createMockFlipperWithPlugin(TestPlugin);
   const pluginInstance = device.sandyPluginStates.get(TestPlugin.id)!;
   expect(pluginInstance.instanceApi.destroyStub).toHaveBeenCalledTimes(0);
 
   // close device
-  store.dispatch({
-    type: 'UNREGISTER_DEVICES',
-    payload: new Set([device.serial]),
-  });
+  destroyDevice(store, logger, device.serial);
   expect(
     (pluginInstance.instanceApi as PluginApi).destroyStub,
   ).toHaveBeenCalledTimes(1);

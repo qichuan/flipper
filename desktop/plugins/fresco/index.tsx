@@ -96,7 +96,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
   };
 
   static exportPersistedState = (
-    callClient: (method: string, params?: any) => Promise<any>,
+    callClient: undefined | ((method: string, params?: any) => Promise<any>),
     persistedState: PersistedState,
     store?: ReduxState,
   ): Promise<PersistedState> => {
@@ -104,7 +104,7 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
     if (!persistedState) {
       persistedState = FlipperImagesPlugin.defaultPersistedState;
     }
-    if (!store) {
+    if (!store || !callClient) {
       return defaultPromise;
     }
     return Promise.all([
@@ -284,13 +284,17 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
 
   init() {
     debugLog('init()');
-    this.updateCaches('init');
-    this.client.subscribe(
-      'debug_overlay_event',
-      (event: FrescoDebugOverlayEvent) => {
-        this.setState({isDebugOverlayEnabled: event.enabled});
-      },
-    );
+    if (this.client.isConnected) {
+      this.updateCaches('init');
+      this.client.subscribe(
+        'debug_overlay_event',
+        (event: FrescoDebugOverlayEvent) => {
+          this.setState({isDebugOverlayEnabled: event.enabled});
+        },
+      );
+    } else {
+      debugLog(`not connected)`);
+    }
     this.imagePool = new ImagePool(this.getImage, (images: ImagesMap) =>
       this.props.setPersistedState({imagesMap: images}),
     );
@@ -378,6 +382,10 @@ export default class FlipperImagesPlugin extends FlipperPlugin<
   };
 
   getImage = (imageId: string) => {
+    if (!this.client.isConnected) {
+      debugLog(`Cannot fetch image ${imageId}: disconnected`);
+      return;
+    }
     debugLog('<- getImage requested for ' + imageId);
     this.client.call('getImage', {imageId}).then((image: ImageData) => {
       debugLog('-> getImage ' + imageId + ' returned');

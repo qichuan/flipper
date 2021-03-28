@@ -9,7 +9,7 @@
 
 import {produce, Draft, enableMapSet} from 'immer';
 import {useState, useEffect} from 'react';
-import {getCurrentPluginInstance} from '../plugin/PluginBase';
+import {Persistable, registerStorageAtom} from '../plugin/PluginBase';
 
 enableMapSet();
 
@@ -19,7 +19,7 @@ export type Atom<T> = {
   update(recipe: (draft: Draft<T>) => void): void;
 };
 
-class AtomValue<T> implements Atom<T> {
+class AtomValue<T> implements Atom<T>, Persistable {
   value: T;
   listeners: ((value: T) => void)[] = [];
 
@@ -36,6 +36,14 @@ class AtomValue<T> implements Atom<T> {
       this.value = nextValue;
       this.notifyChanged();
     }
+  }
+
+  deserialize(value: T) {
+    this.set(value);
+  }
+
+  serialize() {
+    return this.get();
   }
 
   update(recipe: (draft: Draft<T>) => void) {
@@ -69,33 +77,28 @@ type StateOptions = {
 
 export function createState<T>(
   initialValue: T,
+  options?: StateOptions,
+): Atom<T>;
+export function createState<T>(): Atom<T | undefined>;
+export function createState(
+  initialValue: any = undefined,
   options: StateOptions = {},
-): Atom<T> {
-  const atom = new AtomValue<T>(initialValue);
-  if (getCurrentPluginInstance() && options.persist) {
-    const {initialStates, rootStates} = getCurrentPluginInstance()!;
-    if (initialStates) {
-      if (options.persist in initialStates) {
-        atom.set(initialStates[options.persist]);
-      } else {
-        console.warn(
-          `Tried to initialize plugin with existing data, however data for "${options.persist}" is missing. Was the export created with a different Flipper version?`,
-        );
-      }
-    }
-    if (rootStates[options.persist]) {
-      throw new Error(
-        `Some other state is already persisting with key "${options.persist}"`,
-      );
-    }
-    rootStates[options.persist] = atom;
-  }
+): Atom<any> {
+  const atom = new AtomValue(initialValue);
+  registerStorageAtom(options.persist, atom);
   return atom;
 }
 
-export function useValue<T>(atom: Atom<T>): T {
-  const [localValue, setLocalValue] = useState<T>(atom.get());
+export function useValue<T>(atom: Atom<T>): T;
+export function useValue<T>(atom: Atom<T> | undefined, defaultValue: T): T;
+export function useValue<T>(atom: Atom<T> | undefined, defaultValue?: T): T {
+  const [localValue, setLocalValue] = useState<T>(
+    atom ? atom.get() : defaultValue!,
+  );
   useEffect(() => {
+    if (!atom) {
+      return;
+    }
     // atom might have changed between mounting and effect setup
     // in that case, this will cause a re-render, otherwise not
     setLocalValue(atom.get());

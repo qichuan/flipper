@@ -15,7 +15,7 @@ import {
 } from './ui';
 import FlexColumn from './ui/components/FlexColumn';
 import Button from './ui/components/Button';
-import DetailSidebar from './chrome/DetailSidebar';
+import {DetailSidebar} from 'flipper-plugin';
 import {FlipperPlugin} from './plugin';
 import SearchableTable_immutable from './ui/components/searchable/SearchableTable_immutable';
 import textContent from './utils/textContent';
@@ -24,7 +24,7 @@ import {List, Map as ImmutableMap} from 'immutable';
 import React from 'react';
 import {KeyboardActions} from './MenuBar';
 import {TableBodyRow} from './ui';
-import {Idler} from './utils/Idler';
+import {Idler} from 'flipper-plugin';
 
 type ID = string;
 

@@ -17,16 +17,16 @@
     "url": "https://fb.workplace.com/groups/flippersupport/"
   },
   "dependencies": {
-    "lodash": "^4.17.19",
-    "pako": "^2.0.2",
+    "lodash": "^4.17.21",
+    "pako": "^2.0.3",
     "xml-beautifier": "^0.4.0"
   },
   "peerDependencies": {
-    "flipper": "0.0.0",
-    "flipper-plugin": "0.0.0"
+    "flipper": "*",
+    "flipper-plugin": "*"
   },
   "devDependencies": {
     "@types/pako": "^1.0.1",
-    "js-base64": "^3.5.2"
+    "js-base64": "^3.6.0"
   }
 }

@@ -5,7 +5,7 @@
 
 Pod::Spec.new do |spec|
   spec.name = 'Flipper-RSocket'
-  spec.version = '1.1.0'
+  spec.version = '1.3.1'
   spec.license = { :type => 'MIT' }
   spec.homepage = 'https://github.com/rsocket/rsocket-cpp'
   spec.summary = 'C++ implementation of RSocket'
@@ -13,19 +13,19 @@ Pod::Spec.new do |spec|
   spec.source = { :git => 'https://github.com/priteshrnandgaonkar/rsocket-cpp.git', :tag => "0.11.0"}
   spec.module_name = 'RSocket'
   spec.static_framework = true
-  spec.source_files = 'rsocket/benchmarks/*',
-                      'rsocket/framing/*',
-                      'rsocket/internal/*',
-                      'rsocket/statemachine/*',
-                      'rsocket/transports/*',
-                      'rsocket/transports/**/*',
-                      'yarpl/observable/*',
-                      'yarpl/flowable/*',
-                      'rsocket/*'
+  spec.source_files = 'rsocket/benchmarks/*.{h,cpp,m,mm}',
+                      'rsocket/framing/*.{h,cpp,m,mm}',
+                      'rsocket/internal/*.{h,cpp,m,mm}',
+                      'rsocket/statemachine/*.{h,cpp,m,mm}',
+                      'rsocket/transports/*.{h,cpp,m,mm}',
+                      'rsocket/transports/**/*.{h,cpp,m,mm}',
+                      'yarpl/observable/*.{h,cpp,m,mm}',
+                      'yarpl/flowable/*.{h,cpp,m,mm}',
+                      'rsocket/*.{h,cpp,m,mm}'
 
   spec.libraries = "stdc++"
   spec.compiler_flags = '-std=c++1y'
-  spec.dependency 'Flipper-Folly', '~> 2.2'
+  spec.dependency 'Flipper-Folly', '~> 2.5'
   spec.compiler_flags = '-DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1 -DFOLLY_HAVE_LIBGFLAGS=0 -DFOLLY_HAVE_LIBJEMALLOC=0 -DFOLLY_HAVE_PREADV=0 -DFOLLY_HAVE_PWRITEV=0 -DFOLLY_HAVE_TFO=0 -DFOLLY_USE_SYMBOLIZER=0  -frtti
     -fexceptions
     -std=c++14
@@ -53,7 +53,7 @@ Pod::Spec.new do |spec|
   spec.header_dir = './'
   spec.pod_target_xcconfig = { "USE_HEADERMAP" => "NO",
                                "CLANG_CXX_LANGUAGE_STANDARD" => "c++14",
-                               "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)\"/** \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/glog\" \"$(PODS_ROOT)/DoubleConversion\"/**" }
-  spec.platforms = { :ios => "8.0" }
+                               "HEADER_SEARCH_PATHS" => "\"$(PODS_TARGET_SRCROOT)\"/** \"$(PODS_ROOT)/boost-for-react-native\" \"$(PODS_ROOT)/glog\" \"$(PODS_ROOT)/libevent/include\" \"$(PODS_ROOT)/DoubleConversion\"/**" }
+  spec.platforms = { :ios => "10.0" }
 
 end

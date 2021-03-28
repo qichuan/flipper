@@ -9,17 +9,24 @@
 
 import BaseDevice from './BaseDevice';
 import adb, {Client as ADBClient} from 'adbkit';
-import {Priority} from 'adbkit-logcat';
-import ArchivedDevice from './ArchivedDevice';
+import {Priority, Reader} from 'adbkit-logcat';
 import {createWriteStream} from 'fs';
 import type {LogLevel, DeviceType} from 'flipper-plugin';
 import which from 'which';
 import {spawn} from 'child_process';
 import {dirname} from 'path';
+import {DeviceSpec} from 'flipper-plugin-lib';
 
 const DEVICE_RECORDING_DIR = '/sdcard/flipper_recorder';
 
 export default class AndroidDevice extends BaseDevice {
+  adb: ADBClient;
+  abiList: Array<string> = [];
+  sdkVersion: string | undefined = undefined;
+  pidAppMapping: {[key: number]: string} = {};
+  private recordingProcess?: Promise<string>;
+  reader?: Reader;
+
   constructor(
     serial: string,
     deviceType: DeviceType,
@@ -27,13 +34,18 @@ export default class AndroidDevice extends BaseDevice {
     adb: ADBClient,
     abiList: Array<string>,
     sdkVersion: string,
+    specs: DeviceSpec[] = [],
   ) {
-    super(serial, deviceType, title, 'Android');
+    super(serial, deviceType, title, 'Android', specs);
     this.adb = adb;
-    this.icon = 'icons/android.svg';
+    this.icon = 'mobile';
     this.abiList = abiList;
     this.sdkVersion = sdkVersion;
-    this.adb.openLogcat(this.serial).then((reader) => {
+  }
+
+  startLogging() {
+    this.adb.openLogcat(this.serial, {clear: true}).then((reader) => {
+      this.reader = reader;
       reader.on('entry', (entry) => {
         let type: LogLevel = 'unknown';
         if (entry.priority === Priority.VERBOSE) {
@@ -67,11 +79,9 @@ export default class AndroidDevice extends BaseDevice {
     });
   }
 
-  adb: ADBClient;
-  abiList: Array<string> = [];
-  sdkVersion: string | undefined = undefined;
-  pidAppMapping: {[key: number]: string} = {};
-  private recordingProcess?: Promise<string>;
+  stopLogging() {
+    this.reader?.end();
+  }
 
   reverse(ports: [number, number]): Promise<void> {
     return Promise.all(
@@ -84,19 +94,7 @@ export default class AndroidDevice extends BaseDevice {
   }
 
   clearLogs(): Promise<void> {
-    this.logEntries = [];
     return this.executeShell(['logcat', '-c']);
-  }
-
-  archive(): ArchivedDevice {
-    return new ArchivedDevice({
-      serial: this.serial,
-      deviceType: this.deviceType,
-      title: this.title,
-      os: this.os,
-      logEntries: [...this.logEntries],
-      screenshotHandle: null,
-    });
   }
 
   navigateToLocation(location: string) {
@@ -104,7 +102,10 @@ export default class AndroidDevice extends BaseDevice {
     this.adb.shell(this.serial, shellCommand);
   }
 
-  screenshot(): Promise<Buffer> {
+  async screenshot(): Promise<Buffer> {
+    if (this.isArchived) {
+      return Buffer.from([]);
+    }
     return new Promise((resolve, reject) => {
       this.adb.screencap(this.serial).then((stream) => {
         const chunks: Array<Buffer> = [];
@@ -119,6 +120,9 @@ export default class AndroidDevice extends BaseDevice {
   }
 
   async screenCaptureAvailable(): Promise<boolean> {
+    if (this.isArchived) {
+      return false;
+    }
     try {
       await this.executeShell(
         `[ ! -f /system/bin/screenrecord ] && echo "File does not exist"`,
@@ -163,8 +167,28 @@ export default class AndroidDevice extends BaseDevice {
       `mkdir -p "${DEVICE_RECORDING_DIR}" && echo -n > "${DEVICE_RECORDING_DIR}/.nomedia"`,
     );
     const recordingLocation = `${DEVICE_RECORDING_DIR}/video.mp4`;
+    let newSize: string | undefined;
+    try {
+      const sizeString = (
+        await adb.util.readAll(await this.adb.shell(this.serial, 'wm size'))
+      ).toString();
+      const size = sizeString.split(' ').slice(-1).pop()?.split('x');
+      if (size && size.length === 2) {
+        const width = parseInt(size[0], 10);
+        const height = parseInt(size[1], 10);
+        if (width > height) {
+          newSize = '1280x720';
+        } else {
+          newSize = '720x1280';
+        }
+      }
+    } catch (err) {
+      console.error('Error while getting device size', err);
+    }
+    const sizeArg = newSize ? `--size ${newSize}` : '';
+    const cmd = `screenrecord ${sizeArg} "${recordingLocation}"`;
     this.recordingProcess = this.adb
-      .shell(this.serial, `screenrecord --bugreport "${recordingLocation}"`)
+      .shell(this.serial, cmd)
       .then(adb.util.readAll)
       .then(async (output) => {
         const isValid = await this.isValidFile(recordingLocation);
@@ -181,7 +205,9 @@ export default class AndroidDevice extends BaseDevice {
             this.adb.pull(this.serial, recordingLocation).then((stream) => {
               stream.on('end', resolve as () => void);
               stream.on('error', reject);
-              stream.pipe(createWriteStream(destination));
+              stream.pipe(createWriteStream(destination, {autoClose: true}), {
+                end: true,
+              });
             });
           }),
       )
@@ -195,30 +221,41 @@ export default class AndroidDevice extends BaseDevice {
     if (!recordingProcess) {
       return Promise.reject(new Error('Recording was not properly started'));
     }
-    await this.adb.shell(this.serial, `pkill -2 screenrecord`);
+    await this.adb.shell(this.serial, `pkill -l2 screenrecord`);
     const destination = await recordingProcess;
     this.recordingProcess = undefined;
     return destination;
   }
+
+  disconnect() {
+    if (this.recordingProcess) {
+      this.stopScreenCapture();
+    }
+    super.disconnect();
+  }
 }
 
-export async function launchEmulator(name: string) {
+export async function launchEmulator(name: string, coldBoot: boolean = false) {
   // On Linux, you must run the emulator from the directory it's in because
   // reasons ...
   return which('emulator')
     .then((emulatorPath) => {
       if (emulatorPath) {
-        const child = spawn(emulatorPath, [`@${name}`], {
-          detached: true,
-          cwd: dirname(emulatorPath),
-        });
+        const child = spawn(
+          emulatorPath,
+          [`@${name}`, ...(coldBoot ? ['-no-snapshot-load'] : [])],
+          {
+            detached: true,
+            cwd: dirname(emulatorPath),
+          },
+        );
         child.stderr.on('data', (data) => {
-          console.error(`Android emulator error: ${data}`);
+          console.warn(`Android emulator stderr: ${data}`);
         });
-        child.on('error', (e) => console.error(e));
+        child.on('error', (e) => console.warn('Android emulator error:', e));
       } else {
         throw new Error('Could not get emulator path');
       }
     })
-    .catch((e) => console.error(e));
+    .catch((e) => console.error('Android emulator startup failed:', e));
 }

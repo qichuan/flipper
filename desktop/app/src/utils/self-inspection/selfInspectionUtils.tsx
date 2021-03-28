@@ -9,7 +9,6 @@
 
 import Client, {ClientQuery} from '../../Client';
 import {FlipperClientConnection} from '../../Client';
-import FlipperSelfInspectionDevice from '../../devices/FlipperSelfInspectionDevice';
 import {Store} from '../../reducers';
 import {Logger} from '../../fb-interfaces/Logger';
 
@@ -17,6 +16,7 @@ import Server from '../../server';
 import {buildClientId} from '../clientUtils';
 import {selfInspectionClient} from './selfInspectionClient';
 import {flipperMessagesClientPlugin} from './plugins/FlipperMessagesClientPlugin';
+import {destroyDevice} from '../../reducers/connections';
 
 export function initSelfInpector(
   store: Store,
@@ -31,25 +31,21 @@ export function initSelfInpector(
   >,
 ) {
   const appName = 'Flipper';
-  const device_id = 'FlipperSelfInspectionDevice';
-  const device = new FlipperSelfInspectionDevice(
-    device_id,
-    'emulator',
-    appName,
-    'JSWebApp',
-  );
-  store.dispatch({
-    type: 'REGISTER_DEVICE',
-    payload: device,
-  });
 
   selfInspectionClient.addPlugin(flipperMessagesClientPlugin);
+  const hostDevice = store
+    .getState()
+    .connections.devices.find((d) => d.serial === '');
+  if (!hostDevice) {
+    console.error('Failed to find host device for self inspector');
+    return;
+  }
 
   const query: ClientQuery = {
     app: appName,
-    os: 'JSWebApp',
+    os: 'MacOS',
     device: 'emulator',
-    device_id,
+    device_id: '',
     sdk_version: 4,
   };
   const clientId = buildClientId(query);
@@ -61,7 +57,7 @@ export function initSelfInpector(
     logger,
     store,
     undefined,
-    device,
+    hostDevice,
   );
 
   flipperConnections.set(clientId, {
@@ -74,11 +70,7 @@ export function initSelfInpector(
       if (payload.kind == 'ERROR' || payload.kind == 'CLOSED') {
         console.debug(`Device disconnected ${client.id}`, 'server');
         flipperServer.removeConnection(client.id);
-        const toUnregister = new Set<string>();
-        store.dispatch({
-          type: 'UNREGISTER_DEVICES',
-          payload: toUnregister,
-        });
+        destroyDevice(store, logger, client.id);
       }
     },
     onSubscribe(subscription) {

@@ -15,7 +15,7 @@ export * from './ui/index';
 export {getStringFromErrorLike, textContent, sleep} from './utils/index';
 export {serialize, deserialize} from './utils/serialization';
 export * from './utils/jsonTypes';
-export {default as GK} from './fb-stubs/GK';
+export {default as GK, loadGKs, loadDistilleryGK} from './fb-stubs/GK';
 export {default as createPaste} from './fb-stubs/createPaste';
 export {
   internGraphGETAPIRequest,
@@ -28,7 +28,6 @@ export {
   FlipperPlugin,
   FlipperDevicePlugin,
   callClient,
-  Notification,
   BaseAction,
 } from './plugin';
 export {PluginClient, Props} from './plugin';
@@ -42,14 +41,15 @@ export {connect} from 'react-redux';
 export {selectPlugin, StaticView} from './reducers/connections';
 export {writeBufferToFile, bufferToBlob} from './utils/screenshot';
 export {getPluginKey, getPersistedState} from './utils/pluginUtils';
-export {Idler} from './utils/Idler';
+export {Idler, Notification} from 'flipper-plugin';
 export {Store, MiddlewareAPI, State as ReduxState} from './reducers/index';
 export {default as BaseDevice} from './devices/BaseDevice';
 export {DeviceLogEntry, LogLevel, DeviceLogListener} from 'flipper-plugin';
 export {shouldParseAndroidLog} from './utils/crashReporterUtility';
+export {deconstructClientId} from './utils/clientUtils';
 export {default as isProduction} from './utils/isProduction';
 export {createTablePlugin} from './createTablePlugin';
-export {default as DetailSidebar} from './chrome/DetailSidebar';
+export {DetailSidebar} from 'flipper-plugin';
 export {default as Device} from './devices/BaseDevice';
 export {default as AndroidDevice} from './devices/AndroidDevice';
 export {default as MetroDevice} from './devices/MetroDevice';
@@ -112,7 +112,7 @@ export {default as ErrorBlock} from './ui/components/ErrorBlock';
 export {ErrorBlockContainer} from './ui/components/ErrorBlock';
 export {default as ErrorBoundary} from './ui/components/ErrorBoundary';
 export {OrderableOrder} from './ui/components/Orderable';
-export {default as Interactive} from './ui/components/Interactive';
+export {_Interactive as Interactive} from 'flipper-plugin';
 export {default as Orderable} from './ui/components/Orderable';
 export {default as VirtualList} from './ui/components/VirtualList';
 export {Component, PureComponent} from 'react';

@@ -7,7 +7,7 @@
  * @format
  */
 
-import {FlexColumn, Button, styled, Text, FlexRow, Spacer} from '../ui';
+import {FlexColumn, Button} from '../ui';
 import React, {Component, useContext} from 'react';
 import {updateSettings, Action} from '../reducers/settings';
 import {
@@ -25,29 +25,14 @@ import KeyboardShortcutInput from './settings/KeyboardShortcutInput';
 import {isEqual, isMatch, isEmpty} from 'lodash';
 import restartFlipper from '../utils/restartFlipper';
 import LauncherSettingsPanel from '../fb-stubs/LauncherSettingsPanel';
-import SandySettingsPanel from '../fb-stubs/SandySettingsPanel';
 import {reportUsage} from '../utils/metrics';
 import {Modal, message} from 'antd';
 import {Layout, withTrackingScope, _NuxManagerContext} from 'flipper-plugin';
-import GK from '../fb-stubs/GK';
-import ReleaseChannel from '../ReleaseChannel';
-
-const Container = styled(FlexColumn)({
-  padding: 20,
-  width: 800,
-});
-
-const Title = styled(Text)({
-  marginBottom: 18,
-  marginRight: 10,
-  fontWeight: 100,
-  fontSize: '40px',
-});
 
 type OwnProps = {
-  useSandy?: boolean;
   onHide: () => void;
   platform: NodeJS.Platform;
+  noModal?: boolean;
 };
 
 type StateFromProps = {
@@ -107,26 +92,13 @@ class SettingsSheet extends Component<Props, State> {
         onCancel={this.props.onHide}
         width={570}
         title="Settings"
-        footer={footer}>
-        <FlexColumn>{contents}</FlexColumn>
-      </Modal>
-    );
-  }
-
-  renderNativeContainer(
-    contents: React.ReactElement,
-    footer: React.ReactElement,
-  ) {
-    return (
-      <Container>
-        <Title>Settings</Title>
+        footer={footer}
+        bodyStyle={{
+          overflow: 'scroll',
+          maxHeight: 'calc(100vh - 250px)',
+        }}>
         {contents}
-        <br />
-        <FlexRow>
-          <Spacer />
-          {footer}
-        </FlexRow>
-      </Container>
+      </Modal>
     );
   }
 
@@ -139,13 +111,9 @@ class SettingsSheet extends Component<Props, State> {
       enablePrefetching,
       idbPath,
       reactNative,
-      disableSandy,
       darkMode,
+      suppressPluginErrors,
     } = this.state.updatedSettings;
-
-    const {releaseChannel} = this.state.updatedLauncherSettings;
-
-    const {useSandy} = this.props;
 
     const settingsPristine =
       isEqual(this.props.settings, this.state.updatedSettings) &&
@@ -265,37 +233,30 @@ class SettingsSheet extends Component<Props, State> {
             });
           }}
         />
-        <SandySettingsPanel
-          toggled={this.state.updatedSettings.disableSandy}
-          onChange={(v) => {
-            this.setState({
+        <ToggledSection
+          label="Suppress error notifications send from client plugins"
+          toggled={suppressPluginErrors}
+          onChange={(enabled) => {
+            this.setState((prevState) => ({
               updatedSettings: {
-                ...this.state.updatedSettings,
-                disableSandy: v,
+                ...prevState.updatedSettings,
+                suppressPluginErrors: enabled,
               },
-              forcedRestartSettings: {
-                ...this.state.forcedRestartSettings,
-                disableSandy: v,
-              },
-            });
+            }));
           }}
         />
-        {(GK.get('flipper_sandy') ||
-          releaseChannel == ReleaseChannel.INSIDERS) &&
-          !disableSandy && (
-            <ToggledSection
-              label="Enable dark theme (experimental)"
-              toggled={darkMode}
-              onChange={(enabled) => {
-                this.setState((prevState) => ({
-                  updatedSettings: {
-                    ...prevState.updatedSettings,
-                    darkMode: enabled,
-                  },
-                }));
-              }}
-            />
-          )}
+        <ToggledSection
+          label="Enable dark theme (experimental)"
+          toggled={darkMode}
+          onChange={(enabled) => {
+            this.setState((prevState) => ({
+              updatedSettings: {
+                ...prevState.updatedSettings,
+                darkMode: enabled,
+              },
+            }));
+          }}
+        />
         <ToggledSection
           label="React Native keyboard shortcuts"
           toggled={reactNative.shortcuts.enabled}
@@ -384,9 +345,14 @@ class SettingsSheet extends Component<Props, State> {
       </>
     );
 
-    return useSandy
-      ? this.renderSandyContainer(contents, footer)
-      : this.renderNativeContainer(contents, footer);
+    return this.props.noModal ? (
+      <>
+        {contents}
+        {footer}
+      </>
+    ) : (
+      this.renderSandyContainer(contents, footer)
+    );
   }
 }
 

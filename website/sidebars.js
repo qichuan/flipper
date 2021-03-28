@@ -67,6 +67,9 @@ module.exports = {
           },
         ],
       },
+      ...fbInternalOnly([
+        'getting-started/fb/connecting-to-flipper',
+      ]),
       'troubleshooting',
       {
         'Other Platforms': [
@@ -85,6 +88,7 @@ module.exports = {
       'setup/sandbox-plugin',
       'setup/shared-preferences-plugin',
       'setup/leak-canary-plugin',
+      'setup/leak-canary-2-plugin',
       'setup/crash-reporter-plugin',
     ],
     Advanced: ['custom-ports', 'stetho'],
@@ -155,6 +159,7 @@ module.exports = {
         'fb/Oncall-Runbook',
         'fb/sandcastle',
         'fb/Star-Ratings',
+        'fb/sandcastle-overview',
       ]),
     ],
   },

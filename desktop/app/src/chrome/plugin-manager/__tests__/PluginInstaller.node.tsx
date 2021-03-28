@@ -24,7 +24,7 @@ const getUpdatablePluginsMock = mocked(getUpdatablePlugins);
 function getStore(installedPlugins: PluginDetails[] = []): Store {
   return configureStore([])({
     application: {sessionId: 'mysession'},
-    pluginManager: {installedPlugins},
+    plugins: {installedPlugins},
   }) as Store;
 }
 
@@ -33,6 +33,7 @@ const samplePluginDetails1: UpdatablePluginDetails = {
   entry: './test/index.js',
   version: '0.1.0',
   specVersion: 2,
+  pluginType: 'client',
   main: 'dist/bundle.js',
   dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample1',
   source: 'src/index.js',
@@ -52,6 +53,7 @@ const samplePluginDetails2: UpdatablePluginDetails = {
   entry: './test/index.js',
   version: '0.2.0',
   specVersion: 2,
+  pluginType: 'client',
   main: 'dist/bundle.js',
   dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-sample2',
   source: 'src/index.js',

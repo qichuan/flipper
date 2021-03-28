@@ -17,7 +17,7 @@ import {
   RocketOutlined,
 } from '@ant-design/icons';
 import {Glyph, Layout, styled} from '../../ui';
-import {theme, useTrackedCallback} from 'flipper-plugin';
+import {theme, useTrackedCallback, useValue} from 'flipper-plugin';
 import {batch} from 'react-redux';
 import {useDispatch, useStore} from '../../utils/useStore';
 import {
@@ -27,10 +27,9 @@ import {
   selectDevice,
 } from '../../reducers/connections';
 import BaseDevice, {OS} from '../../devices/BaseDevice';
-import {getColorByApp} from '../../chrome/mainsidebar/sidebarUtils';
 import Client from '../../Client';
 import {State} from '../../reducers';
-import {brandIcons} from '../../ui/components/colors';
+import {brandColors, brandIcons, colors} from '../../ui/components/colors';
 import {showEmulatorLauncher} from './LaunchEmulator';
 
 const {Text, Link, Title} = Typography;
@@ -57,6 +56,7 @@ export function AppSelector() {
     uninitializedClients,
     selectedApp,
   } = useStore((state) => state.connections);
+  useValue(selectedDevice?.connected, false); // subscribe to future archived state changes
 
   const onSelectDevice = useTrackedCallback(
     'select-device',
@@ -102,12 +102,10 @@ export function AppSelector() {
         }>
         <AppInspectButton title="Select the device / app to inspect">
           <Layout.Horizontal gap center>
-            <AppIcon appname={client?.query.app} />
+            <AppIcon appname={client?.query.app} device={selectedDevice} />
             <Layout.Container grow shrink>
               <Text strong>{client?.query.app ?? ''}</Text>
-              <Text>
-                {selectedDevice?.displayTitle() || 'Available devices'}
-              </Text>
+              <Text>{selectedDevice?.title || 'Available devices'}</Text>
             </Layout.Container>
             <CaretDownOutlined />
           </Layout.Horizontal>
@@ -139,13 +137,19 @@ const AppInspectButton = styled(Button)({
   },
 });
 
-function AppIcon({appname}: {appname?: string}) {
+function AppIcon({
+  appname,
+  device,
+}: {
+  appname?: string;
+  device?: BaseDevice | null;
+}) {
   const invert = appname?.endsWith('Lite') ?? false;
   const brandName = appname?.replace(/ Lite$/, '');
   const color = brandName
     ? getColorByApp(brandName)
     : theme.backgroundTransparentHover;
-  const icon = brandName && (brandIcons as any)[brandName];
+  const icon = (brandName && (brandIcons as any)[brandName]) ?? device?.icon;
   return (
     <AppIconContainer style={{background: invert ? 'white' : color}}>
       {icon && (
@@ -177,8 +181,9 @@ function computeEntries(
   const entries = devices
     .filter(
       (device) =>
-        // hide non default devices, unless they have a connected client
+        // hide non default devices, unless they have a connected client or plugins
         canBeDefaultDevice(device) ||
+        device.hasDevicePlugins ||
         clients.some((c) => c.deviceSync === device),
     )
     .map((device) => {
@@ -190,7 +195,7 @@ function computeEntries(
           onClick={() => {
             onSelectDevice(device);
           }}>
-          {device.displayTitle()}
+          <DeviceTitle device={device} />
         </Menu.Item>
       );
       const clientEntries = getAvailableClients(device, clients).map(
@@ -200,7 +205,9 @@ function computeEntries(
             onClick={() => {
               onSelectApp(device, client);
             }}>
-            <Radio value={client.id}>{client.query.app}</Radio>
+            <Radio value={client.id}>
+              <ClientTitle client={client} />
+            </Radio>
           </Menu.Item>
         ),
       );
@@ -219,6 +226,47 @@ function computeEntries(
     ]);
   }
   return entries.flat();
+}
+
+function DeviceTitle({device}: {device: BaseDevice}) {
+  const connected = useValue(device.connected);
+  const isImported = device.isArchived;
+  return (
+    <span>
+      <>{device.title} </>
+      {!connected || isImported ? (
+        <span
+          style={{
+            textTransform: 'uppercase',
+            fontSize: '0.6em',
+            color: isImported ? theme.primaryColor : theme.errorColor,
+            fontWeight: 'bold',
+          }}>
+          {isImported ? '(Imported)' : '(Offline)'}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function ClientTitle({client}: {client: Client}) {
+  const connected = useValue(client.connected);
+  return (
+    <span>
+      <>{client.query.app} </>
+      {!connected ? (
+        <span
+          style={{
+            textTransform: 'uppercase',
+            fontSize: '0.6em',
+            color: theme.errorColor,
+            fontWeight: 'bold',
+          }}>
+          (Offline)
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 function NoDevices() {
@@ -250,4 +298,30 @@ function NoDevices() {
       }
     />
   );
+}
+
+function getColorByApp(app?: string | null): string {
+  let iconColor: string | undefined = (brandColors as any)[app!];
+
+  if (!iconColor) {
+    if (!app) {
+      // Device plugin
+      iconColor = colors.macOSTitleBarIconBlur;
+    } else {
+      const pluginColors = [
+        colors.seaFoam,
+        colors.teal,
+        colors.lime,
+        colors.lemon,
+        colors.orange,
+        colors.tomato,
+        colors.cherry,
+        colors.pink,
+        colors.grape,
+      ];
+
+      iconColor = pluginColors[parseInt(app, 36) % pluginColors.length];
+    }
+  }
+  return iconColor;
 }

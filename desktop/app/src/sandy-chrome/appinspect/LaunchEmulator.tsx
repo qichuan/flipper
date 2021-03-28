@@ -8,8 +8,13 @@
  */
 
 import React, {useEffect, useState} from 'react';
-import {Modal, Button, message, Alert} from 'antd';
-import {AndroidOutlined, AppleOutlined} from '@ant-design/icons';
+import {Modal, Button, message, Alert, Menu, Dropdown} from 'antd';
+import {
+  AppleOutlined,
+  PoweroffOutlined,
+  MoreOutlined,
+  AndroidOutlined,
+} from '@ant-design/icons';
 import {Store} from '../../reducers';
 import {useStore} from '../../utils/useStore';
 import {launchEmulator} from '../../devices/AndroidDevice';
@@ -23,10 +28,15 @@ import {
 import GK from '../../fb-stubs/GK';
 import {JSEmulatorLauncherSheetSandy} from '../../chrome/JSEmulatorLauncherSheet';
 
+const COLD_BOOT = 'cold-boot';
+
 export function showEmulatorLauncher(store: Store) {
   renderReactRoot((unmount) => (
     <Provider store={store}>
-      <LaunchEmulatorDialog onClose={unmount} getSimulators={getSimulators} />
+      <LaunchEmulatorDialog
+        onClose={unmount}
+        getSimulators={getSimulators.bind(store)}
+      />
     </Provider>
   ));
 }
@@ -49,11 +59,12 @@ export const LaunchEmulatorDialog = withTrackingScope(
     );
     const [iosEmulators, setIosEmulators] = useState<IOSDeviceParams[]>([]);
 
+    const store = useStore();
     useEffect(() => {
       if (!iosEnabled) {
         return;
       }
-      getSimulators(false).then((emulators) => {
+      getSimulators(store, false).then((emulators) => {
         setIosEmulators(
           emulators.filter(
             (device) =>
@@ -62,28 +73,50 @@ export const LaunchEmulatorDialog = withTrackingScope(
           ),
         );
       });
-    }, [iosEnabled, getSimulators]);
+    }, [iosEnabled, getSimulators, store]);
 
     const items = [
-      ...androidEmulators.map((name) => (
-        <Button
-          key={name}
-          icon={<AndroidOutlined />}
-          onClick={() =>
-            launchEmulator(name)
-              .catch((e) => {
-                console.error(e);
-                message.error('Failed to start emulator: ' + e);
-              })
-              .then(onClose)
-          }>
-          {name}
-        </Button>
-      )),
+      ...(androidEmulators.length > 0
+        ? [<AndroidOutlined key="android logo" />]
+        : []),
+      ...androidEmulators.map((name) => {
+        const launch = (coldBoot: boolean) => {
+          launchEmulator(name, coldBoot)
+            .catch((e) => {
+              console.error(e);
+              message.error('Failed to start emulator: ' + e);
+            })
+            .then(onClose);
+        };
+        const menu = (
+          <Menu
+            onClick={({key}) => {
+              switch (key) {
+                case COLD_BOOT: {
+                  launch(true);
+                  break;
+                }
+              }
+            }}>
+            <Menu.Item key={COLD_BOOT} icon={<PoweroffOutlined />}>
+              Cold Boot
+            </Menu.Item>
+          </Menu>
+        );
+        return (
+          <Dropdown.Button
+            key={name}
+            overlay={menu}
+            icon={<MoreOutlined />}
+            onClick={() => launch(false)}>
+            {name}
+          </Dropdown.Button>
+        );
+      }),
+      ...(iosEmulators.length > 0 ? [<AppleOutlined key="ios logo" />] : []),
       ...iosEmulators.map((device) => (
         <Button
           key={device.udid}
-          icon={<AppleOutlined />}
           onClick={() =>
             launchSimulator(device.udid)
               .catch((e) => {

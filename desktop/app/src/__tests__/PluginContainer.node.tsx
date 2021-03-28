@@ -21,8 +21,9 @@ import {
   DeviceLogEntry,
   useValue,
 } from 'flipper-plugin';
-import {selectPlugin, starPlugin} from '../reducers/connections';
+import {selectPlugin} from '../reducers/connections';
 import {updateSettings} from '../reducers/settings';
+import {switchPlugin} from '../reducers/pluginManager';
 
 interface PersistedState {
   count: 1;
@@ -209,9 +210,9 @@ test('PluginContainer can render Sandy plugins', async () => {
   `);
 
   // make sure the plugin gets connected
-  const pluginInstance: ReturnType<typeof plugin> = client.sandyPluginStates.get(
-    definition.id,
-  )!.instanceApi;
+  const pluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get(definition.id)!.instanceApi;
   expect(pluginInstance.connectedStub).toBeCalledTimes(1);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
@@ -286,7 +287,7 @@ test('PluginContainer can render Sandy plugins', async () => {
   // disable
   act(() => {
     store.dispatch(
-      starPlugin({
+      switchPlugin({
         plugin: definition,
         selectedApp: client.query.app,
       }),
@@ -301,7 +302,7 @@ test('PluginContainer can render Sandy plugins', async () => {
   // re-enable
   act(() => {
     store.dispatch(
-      starPlugin({
+      switchPlugin({
         plugin: definition,
         selectedApp: client.query.app,
       }),
@@ -357,9 +358,9 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(client.rawSend).toBeCalledWith('init', {plugin: 'TestPlugin'});
   (client.rawSend as jest.Mock).mockClear();
   // make sure the plugin gets connected
-  const pluginInstance: ReturnType<typeof plugin> = client.sandyPluginStates.get(
-    definition.id,
-  )!.instanceApi;
+  const pluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get(definition.id)!.instanceApi;
   expect(pluginInstance.connectedStub).toBeCalledTimes(1);
   expect(pluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
@@ -401,7 +402,7 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   // disable
   act(() => {
     store.dispatch(
-      starPlugin({
+      switchPlugin({
         plugin: definition,
         selectedApp: client.query.app,
       }),
@@ -426,7 +427,7 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   // re-enable
   act(() => {
     store.dispatch(
-      starPlugin({
+      switchPlugin({
         plugin: definition,
         selectedApp: client.query.app,
       }),
@@ -438,9 +439,9 @@ test('PluginContainer triggers correct lifecycles for background plugin', async 
   expect(pluginInstance.activatedStub).toBeCalledTimes(2);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(2);
 
-  const newPluginInstance: ReturnType<typeof plugin> = client.sandyPluginStates.get(
-    'TestPlugin',
-  )!.instanceApi;
+  const newPluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get('TestPlugin')!.instanceApi;
   expect(newPluginInstance.connectedStub).toBeCalledTimes(1);
   expect(newPluginInstance.disconnectedStub).toBeCalledTimes(0);
   expect(newPluginInstance.activatedStub).toBeCalledTimes(0);
@@ -699,9 +700,9 @@ test('PluginContainer can render Sandy device plugins', async () => {
   `);
 
   // make sure the plugin gets connected
-  const pluginInstance: ReturnType<typeof devicePlugin> = device.sandyPluginStates.get(
-    definition.id,
-  )!.instanceApi;
+  const pluginInstance: ReturnType<
+    typeof devicePlugin
+  > = device.sandyPluginStates.get(definition.id)!.instanceApi;
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(0);
 
@@ -938,6 +939,7 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
     definition,
     {
       additionalPlugins: [definition2, definition3],
+      dontEnableAdditionalPlugins: true,
     },
   );
 
@@ -948,19 +950,21 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
   `);
   expect(renders).toBe(1);
 
-  const pluginInstance: ReturnType<typeof plugin> = client.sandyPluginStates.get(
-    definition.id,
-  )!.instanceApi;
+  const pluginInstance: ReturnType<
+    typeof plugin
+  > = client.sandyPluginStates.get(definition.id)!.instanceApi;
   expect(pluginInstance.isPluginAvailable(definition.id)).toBeTruthy();
   expect(pluginInstance.isPluginAvailable('nonsense')).toBeFalsy();
   expect(pluginInstance.isPluginAvailable(definition2.id)).toBeFalsy(); // not enabled yet
-  expect(pluginInstance.isPluginAvailable(definition3.id)).toBeTruthy();
+  expect(pluginInstance.isPluginAvailable(definition3.id)).toBeFalsy(); // not enabled yet
   expect(pluginInstance.activatedStub).toBeCalledTimes(1);
   expect(pluginInstance.deactivatedStub).toBeCalledTimes(0);
   expect(linksSeen).toEqual([]);
 
-  // open a device plugin
+  // star and navigate to a device plugin
+  store.dispatch(switchPlugin({plugin: definition3}));
   pluginInstance.selectPlugin(definition3.id);
+  expect(pluginInstance.isPluginAvailable(definition3.id)).toBeTruthy();
   expect(store.getState().connections.selectedPlugin).toBe(definition3.id);
   expect(renderer.baseElement.querySelector('h1')).toMatchInlineSnapshot(`
     <h1>
@@ -980,13 +984,13 @@ test('Sandy plugins support isPluginSupported + selectPlugin', async () => {
   `);
   expect(linksSeen).toEqual(['data']);
 
-  // try to go to plugin 2, fails (not starred, so no-op)
+  // try to go to plugin 2, fails (not enabled, so no-op)
   pluginInstance.selectPlugin(definition2.id);
   expect(store.getState().connections.selectedPlugin).toBe(definition.id);
 
   // star plugin 2 and navigate to plugin 2
   store.dispatch(
-    starPlugin({
+    switchPlugin({
       plugin: definition2,
       selectedApp: client.query.app,
     }),

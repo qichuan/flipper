@@ -41,6 +41,7 @@ const SidebarContainer = styled(Layout.Container)<{
         backgroundColor: theme.backgroundDefault,
       }),
   flex: 1,
+  overflow: 'hidden',
 }));
 SidebarContainer.displayName = 'Sidebar:SidebarContainer';
 
@@ -144,6 +145,7 @@ export class Sidebar extends Component<SidebarProps, SidebarState> {
     let minWidth: number | undefined;
     let maxWidth: number | undefined;
 
+    // TODO: memo
     const resizable: {[key: string]: boolean} = {};
     if (position === 'left') {
       resizable.right = true;

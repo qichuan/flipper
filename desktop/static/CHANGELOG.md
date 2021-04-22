@@ -1,3 +1,27 @@
+# 0.86.0 (21/4/2021)
+
+ * [D27685983](https://github.com/facebook/flipper/search?q=D27685983&type=Commits) -  [Layout] Addressed several performance issues in the layout plugin
+ * [D27708650](https://github.com/facebook/flipper/search?q=D27708650&type=Commits) -  [Layout] Make the layer selection more prominent
+ * [D27813660](https://github.com/facebook/flipper/search?q=D27813660&type=Commits)
+ * [D27896693](https://github.com/facebook/flipper/search?q=D27896693&type=Commits) -  [Internal]
+
+
+# 0.85.0 (14/4/2021)
+
+ * [D27732746](https://github.com/facebook/flipper/search?q=D27732746&type=Commits) -  Electron downgraded to v11.2.3 to work-around performance issues on MacOS Big Sur
+
+
+# 0.83.0 (31/3/2021)
+
+ * [D27395517](https://github.com/facebook/flipper/search?q=D27395517&type=Commits) -  Logs plugin will now automatically truncate long lines
+ * [D27397506](https://github.com/facebook/flipper/search?q=D27397506&type=Commits) -  Added an explicit autoscroll indicator in logs and fixed snapping
+
+
+# 0.82.2 (30/3/2021)
+
+ * [D27346262](https://github.com/facebook/flipper/search?q=D27346262&type=Commits) -  Logs plugin now supports physical iOS devices
+
+
 # 0.82.0 (25/3/2021)
 
  * [D27188241](https://github.com/facebook/flipper/search?q=D27188241&type=Commits) -  Restored the possibility to use Regex in logs search

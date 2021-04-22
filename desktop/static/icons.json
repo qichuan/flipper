@@ -369,7 +369,8 @@
   ],
   "code": [
     12,
-    16
+    16,
+    20
   ],
   "undo-outline": [
     16
@@ -585,5 +586,8 @@
   ],
   "box-outline": [
     24
+  ],
+  "differential": [
+    16
   ]
 }

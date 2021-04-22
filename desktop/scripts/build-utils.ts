@@ -54,7 +54,7 @@ const hardcodedPlugins = new Set<string>([
 ]);
 
 export function die(err: Error) {
-  console.error(err.stack);
+  console.error(err);
   process.exit(1);
 }
 
@@ -109,6 +109,8 @@ const minifierConfig = {
     keep_fnames: true,
     module: true,
     warnings: true,
+    mangle: false,
+    compress: false,
   },
 };
 

@@ -4,6 +4,7 @@ title: Plugin structure
 ---
 
 import FbNpmDeps from '../fb/adding-npm-dependencies-0.mdx'
+import FbOnlyParts from '../fb/fb-only-parts-in-os-plugins.mdx'
 
 Flipper Desktop plugins have a rigid structure. We recommend to scaffold any new plugin using our scaffolding tooling.
 
@@ -122,7 +123,7 @@ Flipper Desktop plugins come in three possible flavors:
 
 A plugin always exposes two elements from its entry module (typically `src/index.tsx`): `plugin` and `Component`:
 
-```typescript
+```tsx
 import {PluginClient} from 'flipper-plugin';
 
 export function plugin(client: PluginClient) {
@@ -143,7 +144,7 @@ Flipper also supports so-called device plugins - plugins that are available for 
 so are a bit more limited in general.
 Their entry module anatomy is:
 
-```typescript
+```tsx
 import {DevicePluginClient} from 'flipper-plugin';
 
 export function devicePlugin(client: DevicePluginClient) {
@@ -244,3 +245,11 @@ The main difference of version 2 is that plugins are transpiled and bundled befo
 The easiest way for migration is using of command `flipper-pkg migrate`. It will automatically migrate your plugin definition to the latest version.
 
 </OssOnly>
+
+<FbInternalOnly>
+
+## Adding fb-only code to open-sourced plugins
+
+<FbOnlyParts />
+
+</FbInternalOnly>

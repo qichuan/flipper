@@ -60,17 +60,15 @@ type ExtractClientType<Module extends FlipperPluginModule<any>> = Parameters<
   Module['plugin']
 >[0];
 
-type ExtractMethodsType<
-  Module extends FlipperPluginModule<any>
-> = ExtractClientType<Module> extends PluginClient<any, infer Methods>
-  ? Methods
-  : never;
+type ExtractMethodsType<Module extends FlipperPluginModule<any>> =
+  ExtractClientType<Module> extends PluginClient<any, infer Methods>
+    ? Methods
+    : never;
 
-type ExtractEventsType<
-  Module extends FlipperPluginModule<any>
-> = ExtractClientType<Module> extends PluginClient<infer Events, any>
-  ? Events
-  : never;
+type ExtractEventsType<Module extends FlipperPluginModule<any>> =
+  ExtractClientType<Module> extends PluginClient<infer Events, any>
+    ? Events
+    : never;
 
 interface BasePluginResult {
   /**
@@ -95,7 +93,7 @@ interface BasePluginResult {
   /**
    * Emulate triggering a deeplink
    */
-  triggerDeepLink(deeplink: unknown): void;
+  triggerDeepLink(deeplink: unknown): Promise<void>;
 
   /**
    * Grab all the persistable state, but will ignore any onExport handler
@@ -198,7 +196,7 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
   const deviceName = 'TestDevice';
   const fakeFlipperClient: RealFlipperClient = {
     id: `${appName}#${testDevice.os}#${deviceName}#${testDevice.serial}`,
-    plugins: [definition.id],
+    plugins: new Set([definition.id]),
     query: {
       app: appName,
       device: deviceName,
@@ -211,10 +209,16 @@ export function startPlugin<Module extends FlipperPluginModule<any>>(
     },
     connected: createState(true),
     initPlugin() {
+      if (options?.isArchived) {
+        return;
+      }
       this.connected.set(true);
       pluginInstance.connect();
     },
     deinitPlugin() {
+      if (options?.isArchived) {
+        return;
+      }
       this.connected.set(false);
       pluginInstance.disconnect();
     },
@@ -310,7 +314,6 @@ export function startDevicePlugin<Module extends FlipperDevicePluginModule>(
 
   const flipperLib = createMockFlipperLib(options);
   const testDevice = createMockDevice(options);
-  testDevice.devicePlugins.push(definition.id);
   const pluginInstance = new SandyDevicePluginInstance(
     flipperLib,
     definition,
@@ -370,7 +373,6 @@ export function createMockFlipperLib(options?: StartPluginOptions): FlipperLib {
       return options?.GKs?.includes(gk) || false;
     },
     selectPlugin: jest.fn(),
-    isPluginAvailable: jest.fn().mockImplementation(() => false),
     writeTextToClipboard: jest.fn(),
     showNotification: jest.fn(),
   };
@@ -386,8 +388,13 @@ function createBasePluginResult(
     exportStateAsync: () =>
       pluginInstance.exportState(createStubIdler(), () => {}),
     exportState: () => pluginInstance.exportStateSync(),
-    triggerDeepLink: (deepLink: unknown) => {
+    triggerDeepLink: async (deepLink: unknown) => {
       pluginInstance.triggerDeepLink(deepLink);
+      return new Promise((resolve) => {
+        // this ensures the test won't continue until the setImmediate used by
+        // the deeplink handling event is handled
+        setImmediate(resolve);
+      });
     },
     destroy: () => pluginInstance.destroy(),
     triggerMenuEntry: (action: string) => {
@@ -486,7 +493,6 @@ function createMockDevice(options?: StartPluginOptions): RealFlipperDevice {
     serial: 'serial-000',
     isArchived: !!options?.isArchived,
     connected: createState(true),
-    devicePlugins: [],
     addLogListener(cb) {
       logListeners.push(cb);
       return (logListeners.length - 1) as any;

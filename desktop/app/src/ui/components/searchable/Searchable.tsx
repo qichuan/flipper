@@ -10,9 +10,7 @@
 import {Filter} from '../filter/types';
 import {TableColumns} from '../table/types';
 import {PureComponent} from 'react';
-import Toolbar from '../Toolbar';
 import Input from '../Input';
-import {colors} from '../colors';
 import Text from '../Text';
 import FlexBox from '../FlexBox';
 import Glyph from '../Glyph';
@@ -21,7 +19,7 @@ import styled from '@emotion/styled';
 import {debounce} from 'lodash';
 import ToggleButton from '../ToggleSwitch';
 import React from 'react';
-import {Layout, theme} from 'flipper-plugin';
+import {Layout, theme, Toolbar} from 'flipper-plugin';
 
 const SearchBar = styled(Toolbar)({
   height: 42,
@@ -35,10 +33,10 @@ export const SearchBox = styled(FlexBox)<{isInvalidInput?: boolean}>(
       flex: `1 0 auto`,
       minWidth: 150,
       height: 30,
-      backgroundColor: colors.white,
+      backgroundColor: theme.backgroundDefault,
       borderRadius: '999em',
       border: `1px solid ${
-        !props.isInvalidInput ? colors.light15 : colors.red
+        !props.isInvalidInput ? theme.dividerColor : theme.errorColor
       }`,
       alignItems: 'center',
       paddingLeft: 4,
@@ -62,9 +60,12 @@ export const SearchInput = styled(Input)<{
   marginLeft: 2,
   marginRight: 8,
   width: '100%',
-  color: props.regex && !props.isValidInput ? colors.red : colors.black,
+  color:
+    props.regex && !props.isValidInput
+      ? theme.errorColor
+      : theme.textColorPrimary,
   '&::-webkit-input-placeholder': {
-    color: colors.placeholder,
+    color: theme.textColorPlaceholder,
     fontWeight: 300,
   },
 }));
@@ -82,7 +83,7 @@ const Clear = styled(Text)({
   lineHeight: '15.5px',
   textAlign: 'center',
   backgroundColor: 'rgba(0,0,0,0.1)',
-  color: colors.white,
+  color: theme.textColorPrimary,
   display: 'block',
   '&:hover': {
     backgroundColor: 'rgba(0,0,0,0.15)',
@@ -145,6 +146,8 @@ function compileRegex(s: string): RegExp | null {
 }
 
 /**
+ * @deprecated use DataTabe / DataList instead
+ *
  * Higher-order-component that allows adding a searchbar on top of the wrapped
  * component. See SearchableManagedTable for usage with a table.
  */
@@ -209,11 +212,8 @@ export default function Searchable(
               const filters = new Set(
                 savedDefaultFilter.enum.map((filter) => filter.value),
               );
-              savedStateFilters[
-                filterIndex
-              ].value = savedDefaultFilter.value.filter((value) =>
-                filters.has(value),
-              );
+              savedStateFilters[filterIndex].value =
+                savedDefaultFilter.value.filter((value) => filters.has(value));
             }
           });
         }
@@ -481,7 +481,7 @@ export default function Searchable(
             <SearchBox tabIndex={-1}>
               <SearchIcon
                 name="magnifying-glass"
-                color={colors.macOSTitleBarIcon}
+                color={theme.textColorSecondary}
                 size={16}
               />
               {this.state.filters.map((filter, i) => (

@@ -6,13 +6,13 @@ exports[`load PluginInstaller list 1`] = `
     class="css-9dawc5-View-FlexBox-FlexColumn"
   >
     <div
-      class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e13mj6h81"
+      class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e1ecpah20"
     >
       <div
-        class="css-bl14sl-View-FlexBox-SearchBox e271nro4"
+        class="css-r8ah0d-View-FlexBox-SearchBox e271nro4"
       >
         <input
-          class="css-184o3nx-Input-SearchInput e271nro3"
+          class="css-84x0xt-Input-SearchInput e271nro3"
           placeholder="Search Flipper plugins..."
           type="text"
           value=""
@@ -20,16 +20,17 @@ exports[`load PluginInstaller list 1`] = `
       </div>
     </div>
     <div
-      class="css-1n5hbjk-View-FlexBox-FlexColumn-Container e11hk09w0"
+      class="css-p5h61d-View-FlexBox-FlexColumn-Container esta8x30"
+      tabindex="0"
     >
       <div
         class="css-18abd42-View-FlexBox-FlexColumn ecr18to0"
       >
         <div
-          class="css-nzypyq-View-FlexBox-FlexRow-TableHeadContainer ejga3101"
+          class="css-1hdusim-View-FlexBox-FlexRow-TableHeadContainer ejga3101"
         >
           <div
-            class="css-zk363n-TableHeadColumnContainer ejga3100"
+            class="css-it9ar6-TableHeadColumnContainer ejga3100"
             title="name"
             width="25%"
           >
@@ -45,7 +46,7 @@ exports[`load PluginInstaller list 1`] = `
             </div>
           </div>
           <div
-            class="css-1243222-TableHeadColumnContainer ejga3100"
+            class="css-1m9d124-TableHeadColumnContainer ejga3100"
             title="version"
             width="10%"
           >
@@ -61,7 +62,7 @@ exports[`load PluginInstaller list 1`] = `
             </div>
           </div>
           <div
-            class="css-nyra6d-TableHeadColumnContainer ejga3100"
+            class="css-qmwopt-TableHeadColumnContainer ejga3100"
             title="description"
             width="flex"
           >
@@ -77,7 +78,7 @@ exports[`load PluginInstaller list 1`] = `
             </div>
           </div>
           <div
-            class="css-hyjqmu-TableHeadColumnContainer ejga3100"
+            class="css-ux5muk-TableHeadColumnContainer ejga3100"
             title="install"
             width="15%"
           >
@@ -95,159 +96,163 @@ exports[`load PluginInstaller list 1`] = `
         </div>
       </div>
       <div
-        class="css-1n5hbjk-View-FlexBox-FlexColumn-Container e11hk09w0"
+        class="css-p5h61d-View-FlexBox-FlexColumn-Container esta8x30"
       >
         <div
-          class="css-1xll39b-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
-          data-key="flipper-plugin-hello"
+          class="css-18abd42-View-FlexBox-FlexColumn ecr18to0"
         >
           <div
-            class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="25%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              hello
-            </span>
-          </div>
-          <div
-            class="css-1rdsust-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="10%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              0.1.0
-            </span>
-          </div>
-          <div
-            class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="flex"
+            class="css-hg3ptm-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
+            data-key="flipper-plugin-hello"
           >
             <div
-              class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="25%"
             >
               <span
                 class="css-fyize4-Text"
               >
-                World?
+                hello
               </span>
-              <div
-                class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
-              />
-              <a
-                class="ant-typography"
-                href="https://yarnpkg.com/en/package/flipper-plugin-hello"
-              >
-                <div
-                  class="css-1tfjvvq-ColoredIconCustom e528dze0"
-                  color="#bec2c9"
-                  size="16"
-                  src="https://external.xx.fbcdn.net/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
-                />
-              </a>
             </div>
-          </div>
-          <div
-            class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="15%"
-          >
-            <button
-              class="ant-btn ant-btn-primary"
-              type="button"
-            >
-              <span>
-                Install
-              </span>
-            </button>
-          </div>
-        </div>
-        <div
-          class="css-1k1evb9-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
-          data-key="flipper-plugin-world"
-        >
-          <div
-            class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="25%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              world
-            </span>
-          </div>
-          <div
-            class="css-1rdsust-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="10%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              0.2.0
-            </span>
-          </div>
-          <div
-            class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="flex"
-          >
             <div
-              class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              class="css-1rdsust-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="10%"
             >
               <span
                 class="css-fyize4-Text"
               >
-                Hello?
+                0.1.0
               </span>
+            </div>
+            <div
+              class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="flex"
+            >
               <div
-                class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
-              />
-              <a
-                class="ant-typography"
-                href="https://yarnpkg.com/en/package/flipper-plugin-world"
+                class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
               >
+                <span
+                  class="css-fyize4-Text"
+                >
+                  World?
+                </span>
                 <div
-                  class="css-1tfjvvq-ColoredIconCustom e528dze0"
-                  color="#bec2c9"
-                  size="16"
-                  src="https://external.xx.fbcdn.net/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
                 />
-              </a>
+                <a
+                  class="ant-typography"
+                  href="https://yarnpkg.com/en/package/flipper-plugin-hello"
+                >
+                  <div
+                    class="css-5r6dd6-ColoredIconCustom e528dze0"
+                    color="#bec2c9"
+                    size="16"
+                    src="https://facebook.com/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  />
+                </a>
+              </div>
+            </div>
+            <div
+              class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="15%"
+            >
+              <button
+                class="ant-btn ant-btn-primary"
+                type="button"
+              >
+                <span>
+                  Install
+                </span>
+              </button>
             </div>
           </div>
           <div
-            class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="15%"
+            class="css-hg3ptm-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
+            data-key="flipper-plugin-world"
           >
-            <button
-              class="ant-btn ant-btn-primary"
-              type="button"
+            <div
+              class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="25%"
             >
-              <span>
-                Install
+              <span
+                class="css-fyize4-Text"
+              >
+                world
               </span>
-            </button>
+            </div>
+            <div
+              class="css-1rdsust-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="10%"
+            >
+              <span
+                class="css-fyize4-Text"
+              >
+                0.2.0
+              </span>
+            </div>
+            <div
+              class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="flex"
+            >
+              <div
+                class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              >
+                <span
+                  class="css-fyize4-Text"
+                >
+                  Hello?
+                </span>
+                <div
+                  class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
+                />
+                <a
+                  class="ant-typography"
+                  href="https://yarnpkg.com/en/package/flipper-plugin-world"
+                >
+                  <div
+                    class="css-5r6dd6-ColoredIconCustom e528dze0"
+                    color="#bec2c9"
+                    size="16"
+                    src="https://facebook.com/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  />
+                </a>
+              </div>
+            </div>
+            <div
+              class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="15%"
+            >
+              <button
+                class="ant-btn ant-btn-primary"
+                type="button"
+              >
+                <span>
+                  Install
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
   <div
-    class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e13mj6h81"
+    class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e1ecpah20"
   >
     <div
       class="css-1spj5hr-View-FlexBox-FlexRow-Container ersmi542"
     >
       <input
-        class="css-phqpi-Input-FileInputBox ersmi540"
+        class="css-sli06x-Input-FileInputBox ersmi540"
         placeholder="Specify path to a Flipper package or just drag and drop it here..."
         type="text"
         value=""
@@ -259,7 +264,7 @@ exports[`load PluginInstaller list 1`] = `
           alt="dots-3-circle"
           class="ersmi543 css-6iptsk-ColoredIconBlack-CenteredGlyph e528dze1"
           size="16"
-          src="https://external.xx.fbcdn.net/assets/?name=dots-3-circle&variant=outline&size=16&set=facebook_icons&density=1x"
+          src="https://facebook.com/assets/?name=dots-3-circle&variant=outline&size=16&set=facebook_icons&density=1x"
           title="Open file selection dialog"
         />
       </div>
@@ -270,10 +275,10 @@ exports[`load PluginInstaller list 1`] = `
           class="css-auhar3-TooltipContainer e1abcqbd0"
         >
           <div
-            class="ersmi543 css-1vos16e-ColoredIconCustom-CenteredGlyph e528dze0"
+            class="ersmi543 css-1qsl9s4-ColoredIconCustom-CenteredGlyph e528dze0"
             color="#D79651"
             size="16"
-            src="https://external.xx.fbcdn.net/assets/?name=caution-triangle&variant=filled&size=16&set=facebook_icons&density=1x"
+            src="https://facebook.com/assets/?name=caution-triangle&variant=filled&size=16&set=facebook_icons&density=1x"
           />
         </div>
       </div>
@@ -308,13 +313,13 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
     class="css-9dawc5-View-FlexBox-FlexColumn"
   >
     <div
-      class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e13mj6h81"
+      class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e1ecpah20"
     >
       <div
-        class="css-bl14sl-View-FlexBox-SearchBox e271nro4"
+        class="css-r8ah0d-View-FlexBox-SearchBox e271nro4"
       >
         <input
-          class="css-184o3nx-Input-SearchInput e271nro3"
+          class="css-84x0xt-Input-SearchInput e271nro3"
           placeholder="Search Flipper plugins..."
           type="text"
           value=""
@@ -322,16 +327,17 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
       </div>
     </div>
     <div
-      class="css-1n5hbjk-View-FlexBox-FlexColumn-Container e11hk09w0"
+      class="css-p5h61d-View-FlexBox-FlexColumn-Container esta8x30"
+      tabindex="0"
     >
       <div
         class="css-18abd42-View-FlexBox-FlexColumn ecr18to0"
       >
         <div
-          class="css-nzypyq-View-FlexBox-FlexRow-TableHeadContainer ejga3101"
+          class="css-1hdusim-View-FlexBox-FlexRow-TableHeadContainer ejga3101"
         >
           <div
-            class="css-zk363n-TableHeadColumnContainer ejga3100"
+            class="css-it9ar6-TableHeadColumnContainer ejga3100"
             title="name"
             width="25%"
           >
@@ -347,7 +353,7 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
             </div>
           </div>
           <div
-            class="css-1243222-TableHeadColumnContainer ejga3100"
+            class="css-1m9d124-TableHeadColumnContainer ejga3100"
             title="version"
             width="10%"
           >
@@ -363,7 +369,7 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
             </div>
           </div>
           <div
-            class="css-nyra6d-TableHeadColumnContainer ejga3100"
+            class="css-qmwopt-TableHeadColumnContainer ejga3100"
             title="description"
             width="flex"
           >
@@ -379,7 +385,7 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
             </div>
           </div>
           <div
-            class="css-hyjqmu-TableHeadColumnContainer ejga3100"
+            class="css-ux5muk-TableHeadColumnContainer ejga3100"
             title="install"
             width="15%"
           >
@@ -397,159 +403,163 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
         </div>
       </div>
       <div
-        class="css-1n5hbjk-View-FlexBox-FlexColumn-Container e11hk09w0"
+        class="css-p5h61d-View-FlexBox-FlexColumn-Container esta8x30"
       >
         <div
-          class="css-1xll39b-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
-          data-key="flipper-plugin-hello"
+          class="css-18abd42-View-FlexBox-FlexColumn ecr18to0"
         >
           <div
-            class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="25%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              hello
-            </span>
-          </div>
-          <div
-            class="css-1rdsust-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="10%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              0.1.0
-            </span>
-          </div>
-          <div
-            class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="flex"
+            class="css-hg3ptm-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
+            data-key="flipper-plugin-hello"
           >
             <div
-              class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="25%"
             >
               <span
                 class="css-fyize4-Text"
               >
-                World?
+                hello
               </span>
-              <div
-                class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
-              />
-              <a
-                class="ant-typography"
-                href="https://yarnpkg.com/en/package/flipper-plugin-hello"
-              >
-                <div
-                  class="css-1tfjvvq-ColoredIconCustom e528dze0"
-                  color="#bec2c9"
-                  size="16"
-                  src="https://external.xx.fbcdn.net/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
-                />
-              </a>
             </div>
-          </div>
-          <div
-            class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="15%"
-          >
-            <button
-              class="ant-btn ant-btn-default"
-              type="button"
-            >
-              <span>
-                Remove
-              </span>
-            </button>
-          </div>
-        </div>
-        <div
-          class="css-1k1evb9-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
-          data-key="flipper-plugin-world"
-        >
-          <div
-            class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="25%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              world
-            </span>
-          </div>
-          <div
-            class="css-1rdsust-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="10%"
-          >
-            <span
-              class="css-fyize4-Text"
-            >
-              0.2.0
-            </span>
-          </div>
-          <div
-            class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="flex"
-          >
             <div
-              class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              class="css-1rdsust-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="10%"
             >
               <span
                 class="css-fyize4-Text"
               >
-                Hello?
+                0.1.0
               </span>
+            </div>
+            <div
+              class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="flex"
+            >
               <div
-                class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
-              />
-              <a
-                class="ant-typography"
-                href="https://yarnpkg.com/en/package/flipper-plugin-world"
+                class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
               >
+                <span
+                  class="css-fyize4-Text"
+                >
+                  World?
+                </span>
                 <div
-                  class="css-1tfjvvq-ColoredIconCustom e528dze0"
-                  color="#bec2c9"
-                  size="16"
-                  src="https://external.xx.fbcdn.net/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
                 />
-              </a>
+                <a
+                  class="ant-typography"
+                  href="https://yarnpkg.com/en/package/flipper-plugin-hello"
+                >
+                  <div
+                    class="css-5r6dd6-ColoredIconCustom e528dze0"
+                    color="#bec2c9"
+                    size="16"
+                    src="https://facebook.com/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  />
+                </a>
+              </div>
+            </div>
+            <div
+              class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="15%"
+            >
+              <button
+                class="ant-btn ant-btn-default"
+                type="button"
+              >
+                <span>
+                  Remove
+                </span>
+              </button>
             </div>
           </div>
           <div
-            class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
-            title=""
-            width="15%"
+            class="css-hg3ptm-View-FlexBox-FlexRow-TableBodyRowContainer ehuguum1"
+            data-key="flipper-plugin-world"
           >
-            <button
-              class="ant-btn ant-btn-primary"
-              type="button"
+            <div
+              class="css-hdg6vt-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="25%"
             >
-              <span>
-                Install
+              <span
+                class="css-fyize4-Text"
+              >
+                world
               </span>
-            </button>
+            </div>
+            <div
+              class="css-1rdsust-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="10%"
+            >
+              <span
+                class="css-fyize4-Text"
+              >
+                0.2.0
+              </span>
+            </div>
+            <div
+              class="css-1bw2bjn-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="flex"
+            >
+              <div
+                class="css-4yiclo-View-FlexBox-FlexRow epz0qe20"
+              >
+                <span
+                  class="css-fyize4-Text"
+                >
+                  Hello?
+                </span>
+                <div
+                  class="css-t4wmtk-View-FlexBox-Spacer e13mj6h80"
+                />
+                <a
+                  class="ant-typography"
+                  href="https://yarnpkg.com/en/package/flipper-plugin-world"
+                >
+                  <div
+                    class="css-5r6dd6-ColoredIconCustom e528dze0"
+                    color="#bec2c9"
+                    size="16"
+                    src="https://facebook.com/assets/?name=info-circle&variant=filled&size=16&set=facebook_icons&density=1x"
+                  />
+                </a>
+              </div>
+            </div>
+            <div
+              class="css-4dx1ef-TableBodyColumnContainer ehuguum0"
+              title=""
+              width="15%"
+            >
+              <button
+                class="ant-btn ant-btn-primary"
+                type="button"
+              >
+                <span>
+                  Install
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
   <div
-    class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e13mj6h81"
+    class="css-1lxv8hi-Container-Horizontal-SandyToolbarContainer e1ecpah20"
   >
     <div
       class="css-1spj5hr-View-FlexBox-FlexRow-Container ersmi542"
     >
       <input
-        class="css-phqpi-Input-FileInputBox ersmi540"
+        class="css-sli06x-Input-FileInputBox ersmi540"
         placeholder="Specify path to a Flipper package or just drag and drop it here..."
         type="text"
         value=""
@@ -561,7 +571,7 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
           alt="dots-3-circle"
           class="ersmi543 css-6iptsk-ColoredIconBlack-CenteredGlyph e528dze1"
           size="16"
-          src="https://external.xx.fbcdn.net/assets/?name=dots-3-circle&variant=outline&size=16&set=facebook_icons&density=1x"
+          src="https://facebook.com/assets/?name=dots-3-circle&variant=outline&size=16&set=facebook_icons&density=1x"
           title="Open file selection dialog"
         />
       </div>
@@ -572,10 +582,10 @@ exports[`load PluginInstaller list with one plugin installed 1`] = `
           class="css-auhar3-TooltipContainer e1abcqbd0"
         >
           <div
-            class="ersmi543 css-1vos16e-ColoredIconCustom-CenteredGlyph e528dze0"
+            class="ersmi543 css-1qsl9s4-ColoredIconCustom-CenteredGlyph e528dze0"
             color="#D79651"
             size="16"
-            src="https://external.xx.fbcdn.net/assets/?name=caution-triangle&variant=filled&size=16&set=facebook_icons&density=1x"
+            src="https://facebook.com/assets/?name=caution-triangle&variant=filled&size=16&set=facebook_icons&density=1x"
           />
         </div>
       </div>

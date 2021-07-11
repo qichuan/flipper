@@ -39,6 +39,11 @@ export default async function computePackageChecksum(
   hash.setEncoding('hex');
   const files = (await packlist({path: dir})).sort();
   for (const file of files) {
+    const segments = file.split(path.sep);
+    if (segments.length > 0 && segments[0] === 'docs') {
+      continue;
+    }
+
     const filePath = path.resolve(dir, file);
 
     if (filePath === fullChecksumFilePath) {
@@ -54,6 +59,9 @@ export default async function computePackageChecksum(
       const packageJson = await fs.readJson(filePath);
       if (packageJson.version) {
         packageJson.version = '0.0.0';
+      }
+      if (packageJson.engines && packageJson.engines.flipper) {
+        packageJson.engines.flipper = '0.0.0';
       }
       hash.write(JSON.stringify(packageJson));
     } else {

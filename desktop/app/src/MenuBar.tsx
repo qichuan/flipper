@@ -20,7 +20,6 @@ import {
   ACTIVE_SHEET_CHANGELOG,
 } from './reducers/application';
 import {setStaticView} from './reducers/connections';
-import SupportRequestFormV2 from './fb-stubs/SupportRequestFormV2';
 import {Store} from './reducers/';
 import electron, {MenuItemConstructorOptions} from 'electron';
 import {notNull} from './utils/typeUtils';
@@ -33,6 +32,7 @@ import {
 } from 'flipper-plugin';
 import {StyleGuide} from './sandy-chrome/StyleGuide';
 import {showEmulatorLauncher} from './sandy-chrome/appinspect/LaunchEmulator';
+import {webFrame} from 'electron';
 
 export type DefaultKeyboardAction = keyof typeof _buildInMenuEntries;
 export type TopLevelMenu = 'Edit' | 'View' | 'Window' | 'Help';
@@ -88,22 +88,6 @@ export function setupMenuBar(
 
   // create actual menu instance
   const applicationMenu = electron.remote.Menu.buildFromTemplate(template);
-
-  // add menu items to map, so we can modify them easily later
-  registeredActions.forEach((keyboardAction) => {
-    if (keyboardAction != null) {
-      const {topLevelMenu, label, action} = keyboardAction;
-      const menu = applicationMenu.items.find(
-        (menuItem) => menuItem.label === topLevelMenu,
-      );
-      if (menu && menu.submenu) {
-        const menuItem = menu.submenu.items.find(
-          (menuItem) => menuItem.label === label,
-        );
-        menuItem && menuItems.set(action, menuItem);
-      }
-    }
-  });
 
   // update menubar
   electron.remote.Menu.setApplicationMenu(applicationMenu);
@@ -208,6 +192,8 @@ export function addSandyPluginEntries(entries: NormalizedMenuEntry[]) {
         parent.submenu!.append(item);
         menuItems.set(entry.action!, item);
         changedItems = true;
+      } else {
+        console.warn('Invalid top level menu: ' + entry.topLevelMenu);
       }
     }
   }
@@ -283,7 +269,9 @@ function getTemplate(
       label: 'Create...',
       click: function () {
         // Dispatch an action to open the export screen of Support Request form
-        store.dispatch(setStaticView(SupportRequestFormV2));
+        store.dispatch(
+          setStaticView(require('./fb-stubs/SupportRequestFormV2').default),
+        );
       },
     },
   ];
@@ -318,6 +306,33 @@ function getTemplate(
         if (focusedWindow) {
           focusedWindow.setFullScreen(!focusedWindow.isFullScreen());
         }
+      },
+    },
+    {
+      label: 'Actual Size',
+      accelerator: (function () {
+        return 'CmdOrCtrl+0';
+      })(),
+      click: function (_, _focusedWindow: electron.BrowserWindow | undefined) {
+        webFrame.setZoomFactor(1);
+      },
+    },
+    {
+      label: 'Zoom In',
+      accelerator: (function () {
+        return 'CmdOrCtrl+=';
+      })(),
+      click: function (_, _focusedWindow: electron.BrowserWindow | undefined) {
+        webFrame.setZoomFactor(webFrame.getZoomFactor() + 0.25);
+      },
+    },
+    {
+      label: 'Zoom Out',
+      accelerator: (function () {
+        return 'CmdOrCtrl+-';
+      })(),
+      click: function (_, _focusedWindow: electron.BrowserWindow | undefined) {
+        webFrame.setZoomFactor(webFrame.getZoomFactor() - 0.25);
       },
     },
     {

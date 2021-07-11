@@ -11,6 +11,7 @@ import {Component, CSSProperties} from 'react';
 import Text from './Text';
 import styled from '@emotion/styled';
 import React from 'react';
+import {theme} from 'flipper-plugin';
 
 const Label = styled.label({
   display: 'flex',
@@ -26,6 +27,8 @@ LabelText.displayName = 'Select:LabelText';
 
 const SelectMenu = styled.select<{grow?: boolean}>((props) => ({
   flexGrow: props.grow ? 1 : 0,
+  background: theme.backgroundDefault,
+  border: `1px solid ${theme.dividerColor}`,
 }));
 SelectMenu.displayName = 'Select:SelectMenu';
 
@@ -69,15 +72,8 @@ export default class Select extends Component<{
   };
 
   render() {
-    const {
-      className,
-      options,
-      selected,
-      label,
-      grow,
-      disabled,
-      style,
-    } = this.props;
+    const {className, options, selected, label, grow, disabled, style} =
+      this.props;
 
     let select = (
       <SelectMenu

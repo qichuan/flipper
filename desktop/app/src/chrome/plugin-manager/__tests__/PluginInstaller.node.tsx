@@ -11,7 +11,7 @@ jest.mock('flipper-plugin-lib');
 
 import {default as PluginInstaller} from '../PluginInstaller';
 import React from 'react';
-import {render, waitForElement} from '@testing-library/react';
+import {render, waitFor} from '@testing-library/react';
 import configureStore from 'redux-mock-store';
 import {Provider} from 'react-redux';
 import type {PluginDetails} from 'flipper-plugin-lib';
@@ -82,12 +82,12 @@ test('load PluginInstaller list', async () => {
         // Bit ugly to have this as an effectively test-only option, but
         // without, we rely on height information from Electron which we don't
         // have, causing no items to be rendered.
-        autoHeight={true}
+        autoHeight
       />
     </Provider>
   );
   const {container, getByText} = render(component);
-  await waitForElement(() => getByText('hello'));
+  await waitFor(() => getByText('hello'));
   expect(getUpdatablePluginsMock.mock.calls.length).toBe(1);
   expect(container).toMatchSnapshot();
 });
@@ -106,12 +106,12 @@ test('load PluginInstaller list with one plugin installed', async () => {
         // Bit ugly to have this as an effectively test-only option, but
         // without, we rely on height information from Electron which we don't
         // have, causing no items to be rendered.
-        autoHeight={true}
+        autoHeight
       />
     </Provider>
   );
   const {container, getByText} = render(component);
-  await waitForElement(() => getByText('hello'));
+  await waitFor(() => getByText('hello'));
   expect(getUpdatablePluginsMock.mock.calls.length).toBe(1);
   expect(container).toMatchSnapshot();
 });

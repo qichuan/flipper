@@ -17,11 +17,13 @@ import tracking from './tracking';
 import server from './server';
 import notifications from './notifications';
 import plugins from './plugins';
-import user from './user';
+import user from './fb-stubs/user';
 import pluginManager from './pluginManager';
 import reactNative from './reactNative';
 import pluginMarketplace from './fb-stubs/pluginMarketplace';
 import pluginDownloads from './pluginDownloads';
+import info from '../utils/info';
+import pluginChangeListener from './pluginsChangeListener';
 
 import {Logger} from '../fb-interfaces/Logger';
 import {Store} from '../reducers/index';
@@ -49,6 +51,8 @@ export default function (store: Store, logger: Logger): () => Promise<void> {
     reactNative,
     pluginMarketplace,
     pluginDownloads,
+    info,
+    pluginChangeListener,
   ].filter(notNull);
   const globalCleanup = dispatchers
     .map((dispatcher) => dispatcher(store, logger))

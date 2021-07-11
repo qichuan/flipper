@@ -32,10 +32,8 @@ export type VersionCheckResult =
     };
 
 export default function UpdateIndicator() {
-  const [
-    versionCheckResult,
-    setVersionCheckResult,
-  ] = useState<VersionCheckResult>({kind: 'up-to-date'});
+  const [versionCheckResult, setVersionCheckResult] =
+    useState<VersionCheckResult>({kind: 'up-to-date'});
   const launcherMsg = useStore((state) => state.application.launcherMsg);
 
   // Effect to show notification if details change
@@ -60,8 +58,9 @@ export default function UpdateIndicator() {
                 ) : (
                   <>
                     {' '}
-                    Pull <code>~/fbsource</code> and/or restart Flipper to
-                    update to the latest version.
+                    Run <code>arc pull</code> (optionally with{' '}
+                    <code>--latest</code>) in <code>~/fbsource</code> and
+                    restart Flipper to update to the latest version.
                   </>
                 )
               ) : (

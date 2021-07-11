@@ -12,7 +12,7 @@ import {BasePluginInstance, BasePluginClient} from './PluginBase';
 import {FlipperLib} from './FlipperLib';
 import {RealFlipperDevice} from './DevicePlugin';
 import {batched} from '../state/batch';
-import {Atom, createState} from '../state/atom';
+import {Atom, createState, ReadOnlyAtom} from '../state/atom';
 
 type EventsContract = Record<string, any>;
 type MethodsContract = Record<string, (params: any) => Promise<any>>;
@@ -27,7 +27,7 @@ type Message = {
  */
 export interface PluginClient<
   Events extends EventsContract = {},
-  Methods extends MethodsContract = {}
+  Methods extends MethodsContract = {},
 > extends BasePluginClient {
   /**
    * Identifier that uniquely identifies the connected application
@@ -40,6 +40,7 @@ export interface PluginClient<
   readonly appName: string;
 
   readonly isConnected: boolean;
+  readonly connected: ReadOnlyAtom<boolean>;
 
   /**
    * the onConnect event is fired whenever the plugin is connected to it's counter part on the device.
@@ -88,11 +89,6 @@ export interface PluginClient<
   supportsMethod(method: keyof Methods): Promise<boolean>;
 
   /**
-   * Checks if the provided plugin is available for the current device / application
-   */
-  isPluginAvailable(pluginId: string): boolean;
-
-  /**
    * opens a different plugin by id, optionally providing a deeplink to bring the plugin to a certain state
    */
   selectPlugin(pluginId: string, deeplinkPayload?: unknown): void;
@@ -112,7 +108,7 @@ export interface RealFlipperClient {
     device_id: string;
   };
   deviceSync: RealFlipperDevice;
-  plugins: string[];
+  plugins: Set<string>;
   isBackgroundPlugin(pluginId: string): boolean;
   initPlugin(pluginId: string): void;
   deinitPlugin(pluginId: string): void;
@@ -127,7 +123,7 @@ export interface RealFlipperClient {
 
 export type PluginFactory<
   Events extends EventsContract,
-  Methods extends MethodsContract
+  Methods extends MethodsContract,
 > = (client: PluginClient<Events, Methods>) => object;
 
 export type FlipperPluginComponent = React.FC<{}>;
@@ -169,6 +165,7 @@ export class SandyPluginInstance extends BasePluginInstance {
       get appName() {
         return realClient.query.app;
       },
+      connected: self.connected,
       get isConnected() {
         return self.connected.get();
       },
@@ -200,22 +197,13 @@ export class SandyPluginInstance extends BasePluginInstance {
           method as any,
         );
       },
-      isPluginAvailable(pluginId: string) {
-        return flipperLib.isPluginAvailable(
+      selectPlugin(pluginId: string, deeplink?: unknown) {
+        flipperLib.selectPlugin(
           realClient.deviceSync,
           realClient,
           pluginId,
+          deeplink,
         );
-      },
-      selectPlugin(pluginId: string, deeplink?: unknown) {
-        if (this.isPluginAvailable(pluginId)) {
-          flipperLib.selectPlugin(
-            realClient.deviceSync,
-            realClient,
-            pluginId,
-            deeplink,
-          );
-        }
       },
     };
     this.initializePlugin(() =>

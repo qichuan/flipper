@@ -7,13 +7,7 @@
  * @format
  */
 
-import React, {
-  cloneElement,
-  useState,
-  useCallback,
-  useMemo,
-  useEffect,
-} from 'react';
+import React, {cloneElement, useState, useCallback, useMemo} from 'react';
 import {Button, Divider, Badge, Tooltip, Avatar, Popover} from 'antd';
 import {
   MobileFilled,
@@ -31,6 +25,7 @@ import {SidebarLeft, SidebarRight} from './SandyIcons';
 import {useDispatch, useStore} from '../utils/useStore';
 import {
   ACTIVE_SHEET_PLUGINS,
+  ACTIVE_SHEET_SIGN_IN,
   setActiveSheet,
   toggleLeftSidebarVisible,
   toggleRightSidebarVisible,
@@ -39,18 +34,16 @@ import {theme, Layout, withTrackingScope} from 'flipper-plugin';
 import SetupDoctorScreen, {checkHasNewProblem} from './SetupDoctorScreen';
 import SettingsSheet from '../chrome/SettingsSheet';
 import WelcomeScreen from './WelcomeScreen';
-import SignInSheet from '../chrome/SignInSheet';
 import {errorCounterAtom} from '../chrome/ConsoleLogs';
 import {ToplevelProps} from './SandyApp';
 import {useValue} from 'flipper-plugin';
-import {logout, USER_NOT_SIGNEDIN, USER_UNAUTHORIZED} from '../reducers/user';
+import {logout} from '../reducers/user';
 import config from '../fb-stubs/config';
 import styled from '@emotion/styled';
 import {showEmulatorLauncher} from './appinspect/LaunchEmulator';
 import SupportRequestFormV2 from '../fb-stubs/SupportRequestFormV2';
 import {setStaticView, StaticView} from '../reducers/connections';
 import {getInstance} from '../fb-stubs/Logger';
-import {getUser} from '../fb-stubs/user';
 import {SandyRatingButton} from '../chrome/RatingButton';
 import {filterNotifications} from './notification/notificationUtils';
 import {useMemoize} from 'flipper-plugin';
@@ -369,23 +362,14 @@ function LoginButton() {
   const user = useStore((state) => state.user);
   const login = (user?.id ?? null) !== null;
   const profileUrl = user?.profile_picture?.uri;
-  const [showLogin, setShowLogin] = useState(false);
+  const showLogin = useCallback(() => {
+    dispatch(setActiveSheet(ACTIVE_SHEET_SIGN_IN));
+  }, [dispatch]);
   const [showLogout, setShowLogout] = useState(false);
-  const onClose = useCallback(() => setShowLogin(false), []);
   const onHandleVisibleChange = useCallback(
     (visible) => setShowLogout(visible),
     [],
   );
-
-  useEffect(() => {
-    if (config.showLogin) {
-      getUser().catch((error) => {
-        if (error === USER_UNAUTHORIZED || error === USER_NOT_SIGNEDIN) {
-          setShowLogin(true);
-        }
-      });
-    }
-  }, []);
 
   return login ? (
     <Popover
@@ -414,9 +398,8 @@ function LoginButton() {
       <LeftRailButton
         icon={<LoginOutlined />}
         title="Log In"
-        onClick={() => setShowLogin(true)}
+        onClick={showLogin}
       />
-      {showLogin && <SignInSheet onHide={onClose} />}
     </>
   );
 }

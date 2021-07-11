@@ -21,17 +21,11 @@
     "flipper-plugin"
   ],
   "bugs": {
-    "email": "oncall+wa_kaios@xmail.facebook.com",
-    "url": "https://fb.workplace.com/groups/wa.kaios/"
+    "url": "https://github.com/facebook/flipper/issues"
   },
   "dependencies": {
     "promisify-child-process": "^4.1.0",
-    "recharts": "2.0.9"
-  },
-  "devDependencies": {
-    "@types/recharts": "1.8.19"
-  },
-  "resolutions": {
-    "@types/react": "16.9.17"
+    "recharts": "2.0.9",
+    "d3-array": "2.3.3"
   }
 }

@@ -10,23 +10,21 @@
 import {
   FlexColumn,
   styled,
-  ManagedTable_immutable,
-  Toolbar,
   SearchInput,
   SearchBox,
   Button,
   colors,
   Spacer,
-  TableRows_immutable,
   FlexRow,
   Glyph,
   Link,
   Text,
   LoadingIndicator,
   Tooltip,
+  TableRows,
+  ManagedTable,
 } from '../../ui';
 import React, {useCallback, useState, useEffect} from 'react';
-import {List} from 'immutable';
 import {reportPlatformFailures, reportUsage} from '../../utils/metrics';
 import reloadFlipper from '../../utils/reloadFlipper';
 import {registerInstalledPlugins} from '../../reducers/plugins';
@@ -43,6 +41,7 @@ import {State as AppState} from '../../reducers';
 import {connect} from 'react-redux';
 import {Dispatch, Action} from 'redux';
 import PluginPackageInstaller from './PluginPackageInstaller';
+import {Toolbar} from 'flipper-plugin';
 
 const TAG = 'PluginInstaller';
 
@@ -144,10 +143,10 @@ const PluginInstaller = function ({
             />
           </SearchBox>
         </Toolbar>
-        <ManagedTable_immutable
+        <ManagedTable
           rowLineHeight={28}
           floating={false}
-          multiline={true}
+          multiline
           columnSizes={columnSizes}
           columns={columns}
           highlightableRows={false}
@@ -185,17 +184,16 @@ function InstallButton(props: {
     | {kind: 'Remove'; error?: string}
     | {kind: 'Update'; error?: string};
 
-  const catchError = (
-    actionKind: 'Install' | 'Remove' | 'Update',
-    fn: () => Promise<void>,
-  ) => async () => {
-    try {
-      await fn();
-    } catch (err) {
-      console.error(err);
-      setAction({kind: actionKind, error: err.toString()});
-    }
-  };
+  const catchError =
+    (actionKind: 'Install' | 'Remove' | 'Update', fn: () => Promise<void>) =>
+    async () => {
+      try {
+        await fn();
+      } catch (err) {
+        console.error(err);
+        setAction({kind: actionKind, error: err.toString()});
+      }
+    };
 
   const mkInstallCallback = (action: 'Install' | 'Update') =>
     catchError(action, async () => {
@@ -290,7 +288,7 @@ function useNPMSearch(
   query: string,
   onInstall: () => void,
   installedPlugins: Map<string, InstalledPluginDetails>,
-): TableRows_immutable {
+): TableRows {
   useEffect(() => {
     reportUsage(`${TAG}:open`);
   }, []);
@@ -359,7 +357,7 @@ function useNPMSearch(
     })();
   }, [query, installedPlugins]);
 
-  const rows: TableRows_immutable = List(searchResults.map(createRow));
+  const rows = searchResults.map(createRow);
   return rows;
 }
 

@@ -17,6 +17,8 @@ import {
   Notification,
   globalShortcut,
   session,
+  nativeTheme,
+  shell,
 } from 'electron';
 import os from 'os';
 import path from 'path';
@@ -107,12 +109,16 @@ if (argv['disable-gpu'] || process.env.FLIPPER_DISABLE_GPU === '1') {
 }
 
 process.env.CONFIG = JSON.stringify(config);
+if (config.darkMode) {
+  nativeTheme.themeSource = 'dark';
+}
 
 // possible reference to main app window
 let win: BrowserWindow;
 let appReady = false;
 let deeplinkURL: string | undefined = argv.url;
 let filePath: string | undefined = argv.file;
+let didMount = false;
 
 // tracking
 setInterval(() => {
@@ -151,10 +157,11 @@ app.on('will-finish-launching', () => {
   // Protocol handler for osx
   app.on('open-url', function (event, url) {
     event.preventDefault();
-    deeplinkURL = url;
     argv.url = url;
-    if (win) {
-      win.webContents.send('flipper-protocol-handler', deeplinkURL);
+    if (win && didMount) {
+      win.webContents.send('flipper-protocol-handler', url);
+    } else {
+      deeplinkURL = url;
     }
   });
   app.on('open-file', (event, path) => {
@@ -193,9 +200,11 @@ app.on('ready', () => {
         console.log('Force updating DevTools');
       }
       // Redux
-      await installExtension(REDUX_DEVTOOLS.id).catch((e: any) => {
+      await installExtension(REDUX_DEVTOOLS.id, {
+        loadExtensionOptions: {allowFileAccess: true, forceDownload},
+      }).catch((e: any) => {
         console.error('Failed to install Redux devtools extension', e);
-      }, forceDownload);
+      });
       // React
       // Fix for extension loading (see D27685981)
       // Work around per https://github.com/electron/electron/issues/23662#issuecomment-787420799
@@ -224,6 +233,20 @@ app.on('ready', () => {
   });
 });
 
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() === 'webview') {
+    contents.on('new-window', async (event, url) => {
+      // Disable creating of native Electron windows when requested from web views.
+      // This can happen e.g. when user clicks to a link with target="__blank" on a page loaded in a web view,
+      // or if some javascript code in a web view executes window.open.
+      // Instead of the default implementation, we redirect such URLs to the operating system which handles them automatically:
+      // using default browser for http/https links, using default mail client for "mailto" links etc.
+      event.preventDefault();
+      await shell.openExternal(url);
+    });
+  }
+});
+
 function configureSession() {
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
@@ -243,6 +266,7 @@ app.on('will-quit', () => {
 });
 
 ipcMain.on('componentDidMount', (_event) => {
+  didMount = true;
   if (deeplinkURL) {
     win.webContents.send('flipper-protocol-handler', deeplinkURL);
     deeplinkURL = undefined;
@@ -261,6 +285,10 @@ ipcMain.on('getLaunchTime', (event) => {
     // launch times for example after reloading the renderer process
     launchStartTime = undefined;
   }
+});
+
+ipcMain.on('setTheme', (_e, mode: 'light' | 'dark') => {
+  nativeTheme.themeSource = mode;
 });
 
 ipcMain.on(
@@ -351,6 +379,7 @@ function createWindow() {
       configPath,
       JSON.stringify({
         ...config,
+        darkMode: nativeTheme.themeSource === 'dark',
         lastWindowPosition: {
           x,
           y,

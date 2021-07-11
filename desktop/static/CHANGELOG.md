@@ -1,3 +1,72 @@
+# 0.97.0 (7/7/2021)
+
+ * [D29228868](https://github.com/facebook/flipper/search?q=D29228868&type=Commits) -  [Internal]
+ * [D29585448](https://github.com/facebook/flipper/search?q=D29585448&type=Commits) -  Fixed error handling of UI errors caused by plugins
+
+
+# 0.96.1 (1/7/2021)
+
+ * [D29394736](https://github.com/facebook/flipper/search?q=D29394736&type=Commits) -  Flipper that don't use the new Sandy plugin format yet (see https://fbflipper.com/docs/extending/sandy-migration) will now always be loaded inside a legacy container
+ * [D29486096](https://github.com/facebook/flipper/search?q=D29486096&type=Commits) -  Add support for negative filters in data tables
+ * [D29487811](https://github.com/facebook/flipper/search?q=D29487811&type=Commits) -  Flipper message debugging moved from a separate device to the console tab
+ * [D29516394](https://github.com/facebook/flipper/search?q=D29516394&type=Commits) -  Fixed bug with React Native plugins not loaded: Hermes Debugger, React Dev Tools etc.
+
+
+# 0.96.0 (30/6/2021)
+
+ * [D29388968](https://github.com/facebook/flipper/search?q=D29388968&type=Commits) -  [Network] The network plugin will now detect utf-8 strings if no content header is present
+ * [D29265677](https://github.com/facebook/flipper/search?q=D29265677&type=Commits) -  'flipper' package no longer uses or exposes immutablejs, or ManagedTable_Immutable
+ * [D29327499](https://github.com/facebook/flipper/search?q=D29327499&type=Commits) -  [Flipper] Improve serialisation mechanism format & speed
+ * [D29436059](https://github.com/facebook/flipper/search?q=D29436059&type=Commits) -  Improved dark mode support!
+
+
+# 0.94.1 (16/6/2021)
+
+ * [D28314408](https://github.com/facebook/flipper/search?q=D28314408&type=Commits) -  [MobileConfig] Fix issues with scrolling not working and several other improvements
+
+
+# 0.94.0 (16/6/2021)
+
+ * [D28996137](https://github.com/facebook/flipper/search?q=D28996137&type=Commits) -  Restored context menu in data tables
+ * [D29062064](https://github.com/facebook/flipper/search?q=D29062064&type=Commits) -  Increase width of database name and table name dropdowns
+ * [D29128014](https://github.com/facebook/flipper/search?q=D29128014&type=Commits) -  [Flipper] Provide clearer error if Flipper ports are already in use, making device connections impossible
+ * [D29130379](https://github.com/facebook/flipper/search?q=D29130379&type=Commits) -  [Database] Fix database names not being readable in selection dropdowns
+ * [D29130378](https://github.com/facebook/flipper/search?q=D29130378&type=Commits) -  [Layout] Fixed issue where enum dropdowns would truncate their items
+
+
+# 0.93.0 (9/6/2021)
+
+
+
+# 0.91.2 (24/5/2021)
+
+ * [D28477074](https://github.com/facebook/flipper/search?q=D28477074&type=Commits) -  [Internal]
+
+
+# 0.90.0 (13/5/2021)
+
+ * [D28422966](https://github.com/facebook/flipper/search?q=D28422966&type=Commits) -  [Logs] Fix regression causing the scrollbars to be hidden. This diff fixes a regression where the Logs plugin was no longer scrollable (and scrolls indefinitely, killing perf).
+
+
+# 0.89.0 (13/5/2021)
+
+ * [D28382586](https://github.com/facebook/flipper/search?q=D28382586&type=Commits) -  [React DevTools] It is now possible to switch between the embedded and globally installed version of the React DevTools. This will enable the React DevTools to connect to older RN versions. Fixes #2250, #2224
+ * [D28382587](https://github.com/facebook/flipper/search?q=D28382587&type=Commits) -  [React DevTools] Several improvements that should improve the overal experience, the plugin should load much quicker and behave more predictably.
+
+
+# 0.88.0 (6/5/2021)
+
+ * [D28117560](https://github.com/facebook/flipper/search?q=D28117560&type=Commits) -  Standardize CodeBlock component
+ * [D28119721](https://github.com/facebook/flipper/search?q=D28119721&type=Commits) -  Standardized DataList component
+ * [D28119719](https://github.com/facebook/flipper/search?q=D28119719&type=Commits) -  Fixed application crash notifications not opening the crash log
+ * [D28102398](https://github.com/facebook/flipper/search?q=D28102398&type=Commits) -  CrashReporter plugin got a fresh look and several navigation issues were addressed.
+
+
+# 0.87.0 (28/4/2021)
+
+ * [D27910514](https://github.com/facebook/flipper/search?q=D27910514&type=Commits) -  Severed RSocket connections are no longer treated as an error in plugin code
+
+
 # 0.86.0 (21/4/2021)
 
  * [D27685983](https://github.com/facebook/flipper/search?q=D27685983&type=Commits) -  [Layout] Addressed several performance issues in the layout plugin

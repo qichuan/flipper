@@ -14,13 +14,13 @@ import dispatcher, {
   checkDisabled,
   checkGK,
   createRequirePluginFunction,
-  filterNewestVersionOfEachPlugin,
+  getLatestCompatibleVersionOfEachPlugin,
 } from '../plugins';
 import {BundledPluginDetails, InstalledPluginDetails} from 'flipper-plugin-lib';
 import path from 'path';
 import {remote} from 'electron';
 import {FlipperPlugin} from '../../plugin';
-import reducers, {State} from '../../reducers/index';
+import {createRootReducer, State} from '../../reducers/index';
 import {getInstance} from '../../fb-stubs/Logger';
 import configureStore from 'redux-mock-store';
 import {TEST_PASSING_GK, TEST_FAILING_GK} from '../../fb-stubs/GK';
@@ -33,7 +33,7 @@ import loadDynamicPlugins from '../../utils/loadDynamicPlugins';
 const loadDynamicPluginsMock = mocked(loadDynamicPlugins);
 
 const mockStore = configureStore<State, {}>([])(
-  reducers(undefined, {type: 'INIT'}),
+  createRootReducer()(undefined, {type: 'INIT'}),
 );
 const logger = getInstance();
 
@@ -54,6 +54,7 @@ const sampleInstalledPluginDetails: InstalledPluginDetails = {
 
 const sampleBundledPluginDetails: BundledPluginDetails = {
   ...sampleInstalledPluginDetails,
+  id: 'SampleBundled',
   isBundled: true,
 };
 
@@ -161,7 +162,14 @@ test('requirePlugin loads plugin', () => {
     version: '1.0.0',
   });
   expect(plugin).not.toBeNull();
-  expect((plugin as any).prototype).toBeInstanceOf(FlipperPlugin);
+  expect(Object.keys(plugin as any)).toEqual([
+    'id',
+    'details',
+    'isDevicePlugin',
+    'module',
+  ]);
+  expect(Object.keys((plugin as any).module)).toEqual(['plugin', 'Component']);
+
   expect(plugin!.id).toBe(TestPlugin.id);
 });
 
@@ -169,11 +177,13 @@ test('newest version of each plugin is used', () => {
   const bundledPlugins: BundledPluginDetails[] = [
     {
       ...sampleBundledPluginDetails,
+      id: 'TestPlugin1',
       name: 'flipper-plugin-test1',
       version: '0.1.0',
     },
     {
       ...sampleBundledPluginDetails,
+      id: 'TestPlugin2',
       name: 'flipper-plugin-test2',
       version: '0.1.0-alpha.201',
     },
@@ -181,6 +191,7 @@ test('newest version of each plugin is used', () => {
   const installedPlugins: InstalledPluginDetails[] = [
     {
       ...sampleInstalledPluginDetails,
+      id: 'TestPlugin2',
       name: 'flipper-plugin-test2',
       version: '0.1.0-alpha.21',
       dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test2',
@@ -188,19 +199,21 @@ test('newest version of each plugin is used', () => {
     },
     {
       ...sampleInstalledPluginDetails,
+      id: 'TestPlugin1',
       name: 'flipper-plugin-test1',
       version: '0.10.0',
       dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test1',
       entry: './test/index.js',
     },
   ];
-  const filteredPlugins = filterNewestVersionOfEachPlugin(
-    bundledPlugins,
-    installedPlugins,
-  );
+  const filteredPlugins = getLatestCompatibleVersionOfEachPlugin([
+    ...bundledPlugins,
+    ...installedPlugins,
+  ]);
   expect(filteredPlugins).toHaveLength(2);
   expect(filteredPlugins).toContainEqual({
     ...sampleInstalledPluginDetails,
+    id: 'TestPlugin1',
     name: 'flipper-plugin-test1',
     version: '0.10.0',
     dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test1',
@@ -208,60 +221,10 @@ test('newest version of each plugin is used', () => {
   });
   expect(filteredPlugins).toContainEqual({
     ...sampleBundledPluginDetails,
+    id: 'TestPlugin2',
     name: 'flipper-plugin-test2',
     version: '0.1.0-alpha.201',
   });
-});
-
-test('bundled versions are used when env var FLIPPER_DISABLE_PLUGIN_AUTO_UPDATE is set even if newer versions are installed', () => {
-  process.env.FLIPPER_DISABLE_PLUGIN_AUTO_UPDATE = 'true';
-  try {
-    const bundledPlugins: BundledPluginDetails[] = [
-      {
-        ...sampleBundledPluginDetails,
-        name: 'flipper-plugin-test1',
-        version: '0.1.0',
-      },
-      {
-        ...sampleBundledPluginDetails,
-        name: 'flipper-plugin-test2',
-        version: '0.1.0-alpha.21',
-      },
-    ];
-    const installedPlugins: InstalledPluginDetails[] = [
-      {
-        ...sampleInstalledPluginDetails,
-        name: 'flipper-plugin-test2',
-        version: '0.1.0-alpha.201',
-        dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test2',
-        entry: './test/index.js',
-      },
-      {
-        ...sampleInstalledPluginDetails,
-        name: 'flipper-plugin-test1',
-        version: '0.10.0',
-        dir: '/Users/mock/.flipper/thirdparty/flipper-plugin-test1',
-        entry: './test/index.js',
-      },
-    ];
-    const filteredPlugins = filterNewestVersionOfEachPlugin(
-      bundledPlugins,
-      installedPlugins,
-    );
-    expect(filteredPlugins).toHaveLength(2);
-    expect(filteredPlugins).toContainEqual({
-      ...sampleBundledPluginDetails,
-      name: 'flipper-plugin-test1',
-      version: '0.1.0',
-    });
-    expect(filteredPlugins).toContainEqual({
-      ...sampleBundledPluginDetails,
-      name: 'flipper-plugin-test2',
-      version: '0.1.0-alpha.21',
-    });
-  } finally {
-    delete process.env.FLIPPER_DISABLE_PLUGIN_AUTO_UPDATE;
-  }
 });
 
 test('requirePlugin loads valid Sandy plugin', () => {
@@ -324,6 +287,7 @@ test('requirePlugin loads valid Sandy Device plugin', () => {
   const requireFn = createRequirePluginFunction([], require);
   const plugin = requireFn({
     ...sampleInstalledPluginDetails,
+    pluginType: 'device',
     name,
     dir: path.join(
       __dirname,

@@ -9,7 +9,6 @@
 
 import {
   ManagedDataInspector,
-  Panel,
   FlexCenter,
   styled,
   colors,
@@ -18,6 +17,7 @@ import {
   Client,
   Logger,
 } from 'flipper';
+import {Panel} from 'flipper-plugin';
 import {PureComponent} from 'react';
 import React from 'react';
 import {useMemo, useEffect} from 'react';
@@ -64,13 +64,13 @@ class InspectorSidebarSection extends PureComponent<InspectorSidebarSectionProps
   render() {
     const {id} = this.props;
     return (
-      <Panel heading={id} floating={false} grow={false}>
+      <Panel title={id} pad>
         <ManagedDataInspector
           data={this.props.data}
           setValue={this.props.onValueChanged ? this.setValue : undefined}
           extractValue={this.extractValue}
-          expandRoot={true}
-          collapsed={true}
+          expandRoot
+          collapsed
           tooltips={this.props.tooltips}
         />
       </Panel>

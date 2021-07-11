@@ -25,7 +25,8 @@ import {
   die,
   getVersionNumber,
   genMercurialRevision,
-  generatePluginEntryPoints,
+  prepareDefaultPlugins,
+  moveSourceMaps,
 } from './build-utils';
 import fetch from '@adobe/node-fetch-retry';
 import {getIcons, buildLocalIconPath, getIconURL} from '../app/src/utils/icons';
@@ -78,6 +79,26 @@ const argv = yargs
       choices: ['stable', 'insiders'],
       default: 'stable',
     },
+    'bundled-plugins': {
+      describe:
+        'Enables bundling of plugins into Flipper bundle. Env var FLIPPER_NO_BUNDLED_PLUGINS is equivalent to the command-line option "--no-bundled-plugins".',
+      type: 'boolean',
+    },
+    'rebuild-plugins': {
+      describe:
+        'Enables rebuilding of default plugins on Flipper build. Only make sense in conjunction with "--no-bundled-plugins". Enabled by default, but if disabled using "--no-plugin-rebuild", then plugins are just released as is without rebuilding. This can save some time if you know plugin bundles are already up-to-date.',
+      type: 'boolean',
+    },
+    'default-plugins-dir': {
+      describe:
+        'Directory with prepared list of default plugins which will be included into the Flipper distribution as "defaultPlugins" dir',
+      type: 'string',
+    },
+    'source-map-dir': {
+      describe:
+        'Directory to write the main.bundle.map and bundle.map files for the main and render bundle sourcemaps, respectively',
+      type: 'string',
+    },
   })
   .help()
   .strict()
@@ -101,6 +122,22 @@ if (isFB) {
 }
 
 process.env.FLIPPER_RELEASE_CHANNEL = argv.channel;
+
+if (argv['bundled-plugins'] === false) {
+  process.env.FLIPPER_NO_BUNDLED_PLUGINS = 'true';
+} else if (argv['bundled-plugins'] === true) {
+  delete process.env.FLIPPER_NO_BUNDLED_PLUGINS;
+}
+
+if (argv['rebuild-plugins'] === false) {
+  process.env.FLIPPER_NO_REBUILD_PLUGINS = 'true';
+} else if (argv['rebuild-plugins'] === true) {
+  delete process.env.FLIPPER_NO_REBUILD_PLUGINS;
+}
+
+if (argv['default-plugins-dir']) {
+  process.env.FLIPPER_DEFAULT_PLUGINS_DIR = argv['default-plugins-dir'];
+}
 
 async function generateManifest(versionNumber: string) {
   await fs.writeFile(
@@ -160,7 +197,7 @@ async function afterPack(context: AfterPackContext) {
   // and property names being present.
   type Mutable<T> = {-readonly [P in keyof T]: T[P]};
   const originalPackager = Object.assign({}, context.packager);
-  const packager = (context.packager as unknown) as WinPackager;
+  const packager = context.packager as unknown as WinPackager;
   const appInfo: Mutable<AppInfo> = packager.appInfo;
   const exeFileName = `${packager.appInfo.productFilename}.exe`;
   appInfo.version = FIX_RELEASE_VERSION;
@@ -286,7 +323,13 @@ function downloadIcons(buildFolder: string) {
   return Promise.all(
     iconURLs.map(({name, size, density}) => {
       const url = getIconURL(name, size, density);
-      return fetch(url, {})
+      return fetch(url, {
+        retryOptions: {
+          // Be default, only 5xx are retried but we're getting the odd 404
+          // which goes away on a retry for some reason.
+          retryOnHttpResponse: (res) => res.status >= 400,
+        },
+      })
         .then((res) => {
           if (res.status !== 200) {
             throw new Error(
@@ -319,10 +362,11 @@ function downloadIcons(buildFolder: string) {
   console.log('Created build directory', dir);
 
   await compileMain();
-  await generatePluginEntryPoints(argv.channel === 'insiders');
+  await prepareDefaultPlugins(argv.channel === 'insiders');
   await copyStaticFolder(dir);
   await downloadIcons(dir);
   await compileRenderer(dir);
+  await moveSourceMaps(dir, argv['source-map-dir']);
   const versionNumber = getVersionNumber(argv.version);
   const hgRevision = await genMercurialRevision();
   await modifyPackageManifest(dir, versionNumber, hgRevision, argv.channel);

@@ -12,10 +12,10 @@ import Client from '../../Client';
 import {TableBodyRow} from '../../ui/components/table/types';
 import React, {Component, Fragment} from 'react';
 import {connect} from 'react-redux';
-import {Text, ManagedTable, styled, colors, Link, Bordered} from '../../ui';
+import {Text, ManagedTable, styled, colors, Link} from '../../ui';
 import StatusIndicator from '../../ui/components/StatusIndicator';
 import {State as Store} from '../../reducers';
-import {DevicePluginDefinition, ClientPluginDefinition} from '../../plugin';
+import {PluginDefinition} from '../../plugin';
 
 const InfoText = styled(Text)({
   lineHeight: '130%',
@@ -28,7 +28,7 @@ const Ellipsis = styled(Text)({
   whiteSpace: 'nowrap',
 });
 
-const TableContainer = styled(Bordered)({
+const TableContainer = styled.div({
   marginTop: 10,
   height: 400,
 });
@@ -43,8 +43,8 @@ type StateFromProps = {
   failedPlugins: Array<[PluginDetails, string]>;
   clients: Array<Client>;
   selectedDevice: string | null | undefined;
-  devicePlugins: DevicePluginDefinition[];
-  clientPlugins: ClientPluginDefinition[];
+  devicePlugins: PluginDefinition[];
+  clientPlugins: PluginDefinition[];
 };
 
 type DispatchFromProps = {};
@@ -128,7 +128,7 @@ class PluginDebugger extends Component<Props> {
   getSupportedClients(id: string): string {
     return this.props.clients
       .reduce((acc: Array<string>, cv: Client) => {
-        if (cv.plugins.includes(id)) {
+        if (cv.plugins.has(id)) {
           acc.push(cv.query.app);
         }
         return acc;

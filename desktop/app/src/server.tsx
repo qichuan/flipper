@@ -37,7 +37,6 @@ import {WebsocketClientFlipperConnection} from './utils/js-client-server-utils/w
 import querystring from 'querystring';
 import {IncomingMessage} from 'http';
 import ws from 'ws';
-import {initSelfInpector} from './utils/self-inspection/selfInspectionUtils';
 import DummyDevice from './devices/DummyDevice';
 import BaseDevice from './devices/BaseDevice';
 import {sideEffect} from './utils/sideEffect';
@@ -106,10 +105,6 @@ class Server extends EventEmitter {
   }
 
   init() {
-    if (process.env.NODE_ENV === 'development') {
-      initSelfInpector(this.store, this.logger, this, this.connections);
-    }
-
     const {insecure, secure} = this.store.getState().application.serverPorts;
     this.initialisePromise = this.certificateProvider
       .loadSecureServerConfig()
@@ -292,16 +287,8 @@ class Server extends EventEmitter {
     });
     this.connectionTracker.logConnectionAttempt(clientData);
 
-    const {
-      app,
-      os,
-      device,
-      device_id,
-      sdk_version,
-      csr,
-      csr_path,
-      medium,
-    } = clientData;
+    const {app, os, device, device_id, sdk_version, csr, csr_path, medium} =
+      clientData;
     const transformedMedium = transformCertificateExchangeMediumToType(medium);
     if (transformedMedium === 'WWW') {
       this.store.dispatch({
@@ -518,16 +505,19 @@ class Server extends EventEmitter {
     // otherwise, use given device_id
     const {csr_path, csr} = csrQuery;
     // For iOS we do not need to confirm the device id, as it never changes unlike android.
-    return (csr_path && csr && query.os != 'iOS'
-      ? this.certificateProvider.extractAppNameFromCSR(csr).then((appName) => {
-          return this.certificateProvider.getTargetDeviceId(
-            query.os,
-            appName,
-            csr_path,
-            csr,
-          );
-        })
-      : Promise.resolve(query.device_id)
+    return (
+      csr_path && csr && query.os != 'iOS'
+        ? this.certificateProvider
+            .extractAppNameFromCSR(csr)
+            .then((appName) => {
+              return this.certificateProvider.getTargetDeviceId(
+                query.os,
+                appName,
+                csr_path,
+                csr,
+              );
+            })
+        : Promise.resolve(query.device_id)
     ).then(async (csrId) => {
       query.device_id = csrId;
       query.app = appNameWithUpdateHint(query);
@@ -560,9 +550,9 @@ class Server extends EventEmitter {
 
       client.init().then(() => {
         console.debug(
-          `Device client initialised: ${id}. Supported plugins: ${client.plugins.join(
-            ', ',
-          )}`,
+          `Device client initialised: ${id}. Supported plugins: ${Array.from(
+            client.plugins,
+          ).join(', ')}`,
           'server',
         );
 

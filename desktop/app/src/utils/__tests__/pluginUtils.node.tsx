@@ -7,9 +7,10 @@
  * @format
  */
 
-import {getExportablePlugins, getPluginKey} from '../pluginUtils';
+import {getPluginKey} from '../pluginUtils';
 import {FlipperPlugin, FlipperDevicePlugin} from '../../plugin';
 import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
+import {getExportablePlugins} from '../../selectors/connections';
 
 function createMockFlipperPluginWithDefaultPersistedState(id: string) {
   return class MockFlipperPluginWithDefaultPersistedState extends FlipperPlugin<
@@ -71,7 +72,7 @@ function createMockFlipperPluginWithNoPersistedState(id: string) {
 }
 
 test('getActivePersistentPlugins, where the non persistent plugins getting excluded', async () => {
-  const {store, device, client} = await createMockFlipperWithPlugin(
+  const {store} = await createMockFlipperWithPlugin(
     createMockFlipperPluginWithDefaultPersistedState('ClientPlugin1'),
     {
       additionalPlugins: [
@@ -84,20 +85,15 @@ test('getActivePersistentPlugins, where the non persistent plugins getting exclu
   );
   const state = store.getState();
 
-  state.pluginStates = {
-    [getPluginKey(client.id, device, 'ClientPlugin1')]: {msg: 'DevicePlugin1'},
-    [getPluginKey(client.id, device, 'ClientPlugin4')]: {msg: 'ClientPlugin2'},
-  };
-
-  const list = getExportablePlugins(state, device, client);
+  const list = getExportablePlugins(state);
   expect(list).toEqual([
     {
       id: 'ClientPlugin1',
       label: 'ClientPlugin1',
     },
     {
-      id: 'ClientPlugin4',
-      label: 'ClientPlugin4',
+      id: 'ClientPlugin2',
+      label: 'ClientPlugin2',
     },
     {
       id: 'ClientPlugin5',
@@ -106,13 +102,13 @@ test('getActivePersistentPlugins, where the non persistent plugins getting exclu
   ]);
 });
 
-test('getActivePersistentPlugins, where the plugins not in pluginState or queue gets excluded', async () => {
+test('getActivePersistentPlugins, with message queue', async () => {
   const {store, device, client} = await createMockFlipperWithPlugin(
     createMockFlipperPluginWithDefaultPersistedState('Plugin1'),
     {
       additionalPlugins: [
         createMockDeviceFlipperPlugin('DevicePlugin2'),
-        createMockFlipperPluginWithDefaultPersistedState('ClientPlugin1'),
+        createMockFlipperPluginWithNoPersistedState('ClientPlugin1'),
         createMockFlipperPluginWithDefaultPersistedState('ClientPlugin2'),
         createMockFlipperPluginWithDefaultPersistedState('ClientPlugin3'),
       ],
@@ -121,16 +117,13 @@ test('getActivePersistentPlugins, where the plugins not in pluginState or queue 
 
   const state = store.getState();
 
-  state.pluginStates = {
-    [getPluginKey(client.id, device, 'ClientPlugin2')]: {msg: 'ClientPlugin2'},
-  };
   state.pluginMessageQueue = {
     [getPluginKey(client.id, device, 'ClientPlugin3')]: [
       {method: 'msg', params: {msg: 'ClientPlugin3'}},
     ],
   };
 
-  const list = getExportablePlugins(store.getState(), device, client);
+  const list = getExportablePlugins(store.getState());
   expect(list).toEqual([
     {
       id: 'ClientPlugin2', // has state
@@ -139,6 +132,12 @@ test('getActivePersistentPlugins, where the plugins not in pluginState or queue 
     {
       id: 'ClientPlugin3', // queued
       label: 'ClientPlugin3',
+    },
+    {
+      // in Sandy wrapper, a plugin is either persistable or not, but it doesn't depend on the current state.
+      // So this plugin will show up, even though its state is still the default
+      id: 'Plugin1',
+      label: 'Plugin1',
     },
   ]);
 });

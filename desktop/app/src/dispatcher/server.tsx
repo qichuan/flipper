@@ -16,6 +16,10 @@ import {UninitializedClient} from '../UninitializedClient';
 import {addErrorNotification} from '../reducers/notifications';
 import {CertificateExchangeMedium} from '../utils/CertificateProvider';
 import {selectClient, selectDevice} from '../reducers/connections';
+import {isLoggedIn} from '../fb-stubs/user';
+import React from 'react';
+import {notification, Typography} from 'antd';
+import {ACTIVE_SHEET_SIGN_IN, setActiveSheet} from '../reducers/application';
 
 export default (store: Store, logger: Logger) => {
   const server = new Server(logger, store);
@@ -26,14 +30,27 @@ export default (store: Store, logger: Logger) => {
   });
 
   server.addListener('error', (err) => {
-    store.dispatch(
-      addErrorNotification(
-        'Failed to start websocket server',
-        err.code === 'EADDRINUSE'
-          ? "Couldn't start websocket server. Looks like you have multiple copies of Flipper running."
-          : err.message || 'Unknown error',
-      ),
-    );
+    notification.error({
+      message: 'Failed to start connection server',
+      description:
+        err.code === 'EADDRINUSE' ? (
+          <>
+            Couldn't start connection server. Looks like you have multiple
+            copies of Flipper running or another process is using the same
+            port(s). As a result devices will not be able to connect to Flipper.
+            <br />
+            <br />
+            Please try to kill the offending process by running{' '}
+            <code>kill $(lsof -ti:PORTNUMBER)</code> and restart flipper.
+            <br />
+            <br />
+            {'' + err}
+          </>
+        ) : (
+          <>Failed to start connection server: ${err.message}</>
+        ),
+      duration: null,
+    });
   });
 
   server.addListener('start-client-setup', (client: UninitializedClient) => {
@@ -71,7 +88,6 @@ export default (store: Store, logger: Logger) => {
     ({
       client,
       medium,
-      deviceID,
     }: {
       client: UninitializedClient;
       medium: CertificateExchangeMedium;
@@ -79,10 +95,31 @@ export default (store: Store, logger: Logger) => {
     }) => {
       store.dispatch(
         addErrorNotification(
-          `Client ${client.appName} with device ${deviceID} took long time to connect back on the trusted channel.`,
-          medium === 'WWW'
-            ? 'Verify that you are on lighthouse on your client and have a working internet connection. To connect to lighthouse on your client, use VPN. Follow this link: https://www.internalfb.com/intern/wiki/Ops/Network/Enterprise_Network_Engineering/ene_wlra/VPN_Help/Vpn/mobile/'
-            : 'Verify if your client is connected to Flipper and verify if there is no error related to idb.',
+          `Timed out establishing connection with "${client.appName}" on "${client.deviceName}".`,
+          medium === 'WWW' ? (
+            <>
+              Verify that both your computer and mobile device are on
+              Lighthouse/VPN{' '}
+              {!isLoggedIn().get() && (
+                <>
+                  and{' '}
+                  <Typography.Link
+                    onClick={() =>
+                      store.dispatch(setActiveSheet(ACTIVE_SHEET_SIGN_IN))
+                    }>
+                    log in to Facebook Intern
+                  </Typography.Link>
+                </>
+              )}{' '}
+              so they can exchange certificates.{' '}
+              <Typography.Link href="https://www.internalfb.com/intern/wiki/Ops/Network/Enterprise_Network_Engineering/ene_wlra/VPN_Help/Vpn/mobile/">
+                Check this link
+              </Typography.Link>{' '}
+              on how to enable VPN on mobile device.
+            </>
+          ) : (
+            'Verify that your client is connected to Flipper and that there is no error related to idb.'
+          ),
         ),
       );
     },

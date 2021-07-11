@@ -9,9 +9,9 @@
 
 import {createStore} from 'redux';
 import BaseDevice from '../devices/BaseDevice';
-import {rootReducer} from '../store';
+import {createRootReducer} from '../reducers';
 import {Store} from '../reducers/index';
-import Client, {ClientQuery} from '../Client';
+import Client, {ClientQuery, FlipperClientConnection} from '../Client';
 import {buildClientId} from '../utils/clientUtils';
 import {Logger} from '../fb-interfaces/Logger';
 import {PluginDefinition} from '../plugin';
@@ -20,6 +20,7 @@ import {getInstance} from '../fb-stubs/Logger';
 import {initializeFlipperLibImplementation} from '../utils/flipperLibImplementation';
 import pluginManager from '../dispatcher/pluginManager';
 import {PluginDetails} from 'flipper-plugin-lib';
+import ArchivedDevice from '../devices/ArchivedDevice';
 
 export interface AppOptions {
   plugins?: PluginDefinition[];
@@ -37,6 +38,7 @@ export interface ClientOptions {
 export interface DeviceOptions {
   serial?: string;
   isSupportedByPlugin?: (p: PluginDetails) => boolean;
+  archived?: boolean;
 }
 
 export default class MockFlipper {
@@ -73,7 +75,7 @@ export default class MockFlipper {
   }
 
   public async init({plugins}: AppOptions = {}) {
-    this._store = createStore(rootReducer);
+    this._store = createStore(createRootReducer());
     this._logger = getInstance();
     this.unsubscribePluginManager = pluginManager(this._store, this._logger, {
       runSideEffectsSynchronously: true,
@@ -110,13 +112,17 @@ export default class MockFlipper {
   public createDevice({
     serial,
     isSupportedByPlugin,
+    archived,
   }: DeviceOptions = {}): BaseDevice {
-    const device = new BaseDevice(
-      serial ?? `serial_${++this._deviceCounter}`,
-      'physical',
-      'MockAndroidDevice',
-      'Android',
-    );
+    const s = serial ?? `serial_${++this._deviceCounter}`;
+    const device = archived
+      ? new ArchivedDevice({
+          serial: s,
+          deviceType: 'emulator',
+          title: 'archived device',
+          os: 'Android',
+        })
+      : new BaseDevice(s, 'physical', 'MockAndroidDevice', 'Android');
     device.supportsPlugin = !isSupportedByPlugin
       ? () => true
       : isSupportedByPlugin;
@@ -172,13 +178,12 @@ export default class MockFlipper {
     const client = new Client(
       id,
       query,
-      null, // create a stub connection to avoid this plugin to be archived?
+      device.isArchived ? null : createStubConnection(),
       this._logger,
       this._store,
-      supportedPlugins,
+      new Set(supportedPlugins),
       device,
     );
-
     // yikes
     client.device = {
       then() {
@@ -211,8 +216,11 @@ export default class MockFlipper {
       }
     };
     client.rawSend = jest.fn();
-
-    await client.init();
+    if (!device.isArchived) {
+      await client.init();
+    } else {
+      await client.initFromImport({});
+    }
 
     // As convenience, by default we select the new client, star the plugin, and select it
     if (!skipRegister) {
@@ -226,4 +234,34 @@ export default class MockFlipper {
 
     return client;
   }
+}
+function createStubConnection():
+  | FlipperClientConnection<any, any>
+  | null
+  | undefined {
+  return {
+    close() {
+      throw new Error('Should not be called in test');
+    },
+    fireAndForget() {
+      throw new Error('Should not be called in test');
+    },
+    requestResponse() {
+      throw new Error('Should not be called in test');
+    },
+    connectionStatus() {
+      return {
+        subscribe() {},
+        lift() {
+          throw new Error('Should not be called in test');
+        },
+        map() {
+          throw new Error('Should not be called in test');
+        },
+        take() {
+          throw new Error('Should not be called in test');
+        },
+      };
+    },
+  };
 }

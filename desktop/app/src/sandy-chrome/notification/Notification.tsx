@@ -20,18 +20,19 @@ import {
   EllipsisOutlined,
 } from '@ant-design/icons';
 import {LeftSidebar, SidebarTitle} from '../LeftSidebar';
-import {useStore, useDispatch} from '../../utils/useStore';
-import {ClientQuery} from '../../Client';
-import {deconstructClientId} from '../../utils/clientUtils';
+import {useDispatch, useStore} from '../../utils/useStore';
 import {selectPlugin} from '../../reducers/connections';
 import {
   clearAllNotifications,
+  GLOBAL_NOTIFICATION_PLUGIN_ID,
+  PluginNotification as PluginNotificationOrig,
   updateCategoryBlocklist,
   updatePluginBlocklist,
 } from '../../reducers/notifications';
 import {filterNotifications} from './notificationUtils';
 import {useMemoize} from 'flipper-plugin';
 import BlocklistSettingButton from './BlocklistSettingButton';
+import {Store} from '../../reducers';
 
 type NotificationExtra = {
   onOpen: () => void;
@@ -39,7 +40,7 @@ type NotificationExtra = {
   onHidePlugin: () => void;
   clientName: string | undefined;
   appName: string | undefined;
-  pluginName: string;
+  pluginName: string | null | undefined;
   iconName: string | null | undefined;
 };
 type PluginNotification = NotificationData & NotificationExtra;
@@ -152,17 +153,21 @@ function NotificationEntry({notification}: {notification: PluginNotification}) {
         </Layout.Horizontal>
         {actions}
       </Layout.Right>
-      <Title level={4} ellipsis={{rows: 2}}>
+      <Title level={4} ellipsis={{rows: 3}}>
         {title}
       </Title>
-      <Text type="secondary" style={{fontSize: theme.fontSize.small}}>
-        {clientName && appName
-          ? `${clientName}/${appName}`
-          : clientName ?? appName ?? 'Not Connected'}
-      </Text>
-      <Button style={{width: 'fit-content'}} size="small" onClick={onOpen}>
-        Open {pluginName}
-      </Button>
+      {pluginName !== GLOBAL_NOTIFICATION_PLUGIN_ID && (
+        <>
+          <Text type="secondary" style={{fontSize: theme.fontSize.small}}>
+            {clientName && appName
+              ? `${clientName}/${appName}`
+              : clientName ?? appName ?? 'Not Connected'}
+          </Text>
+          <Button style={{width: 'fit-content'}} size="small" onClick={onOpen}>
+            Open {pluginName}
+          </Button>
+        </>
+      )}
       <DetailCollapse detail={message} />
     </ItemContainer>
   );
@@ -188,22 +193,10 @@ function NotificationList({
 }
 
 export function Notification() {
+  const store = useStore();
   const dispatch = useDispatch();
 
   const [searchString, setSearchString] = useState('');
-
-  const clients = useStore((state) => state.connections.clients);
-  const getClientQuery = useCallback(
-    (id: string | null) =>
-      id !== null
-        ? clients.reduce(
-            (query: ClientQuery | null, client) =>
-              client.id === id ? client.query : query,
-            null,
-          ) ?? deconstructClientId(id)
-        : null,
-    [clients],
-  );
 
   const clientPlugins = useStore((state) => state.plugins.clientPlugins);
   const devicePlugins = useStore((state) => state.plugins.devicePlugins);
@@ -222,21 +215,19 @@ export function Notification() {
   const displayedNotifications: Array<PluginNotification> = useMemo(
     () =>
       activeNotifications.map((noti) => {
+        const client = getClientById(store, noti.client);
+        const device = client
+          ? client.deviceSync
+          : getDeviceById(store, noti.client);
         const plugin = getPlugin(noti.pluginId);
-        const client = getClientQuery(noti.client);
         return {
           ...noti.notification,
-          onOpen: () =>
-            dispatch(
-              selectPlugin({
-                selectedPlugin: noti.pluginId,
-                selectedApp: noti.client,
-                deepLinkPayload: noti.notification.action,
-              }),
-            ),
+          onOpen: () => {
+            openNotification(store, noti);
+          },
           onHideSimilar: noti.notification.category
             ? () =>
-                dispatch(
+                store.dispatch(
                   updateCategoryBlocklist([
                     ...notifications.blocklistedCategories,
                     noti.notification.category!,
@@ -244,19 +235,19 @@ export function Notification() {
                 )
             : null,
           onHidePlugin: () =>
-            dispatch(
+            store.dispatch(
               updatePluginBlocklist([
                 ...notifications.blocklistedPlugins,
                 noti.pluginId,
               ]),
             ),
-          clientName: client?.device_id,
-          appName: client?.app,
+          clientName: client?.query.device_id ?? device?.displayTitle(),
+          appName: client?.query.app,
           pluginName: plugin?.title ?? noti.pluginId,
           iconName: plugin?.icon,
         };
       }),
-    [activeNotifications, notifications, getPlugin, getClientQuery, dispatch],
+    [activeNotifications, notifications, getPlugin, store],
   );
 
   const actions = (
@@ -311,4 +302,39 @@ export function Notification() {
       </Layout.Top>
     </LeftSidebar>
   );
+}
+
+export function openNotification(store: Store, noti: PluginNotificationOrig) {
+  const client = getClientById(store, noti.client);
+  if (client) {
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: noti.pluginId,
+        selectedApp: noti.client,
+        selectedDevice: client.deviceSync,
+        deepLinkPayload: noti.notification.action,
+      }),
+    );
+  } else {
+    const device = getDeviceById(store, noti.client);
+    if (device) {
+      store.dispatch(
+        selectPlugin({
+          selectedPlugin: noti.pluginId,
+          selectedDevice: device,
+          deepLinkPayload: noti.notification.action,
+        }),
+      );
+    }
+  }
+}
+
+function getClientById(store: Store, identifier: string | null) {
+  return store.getState().connections.clients.find((c) => c.id === identifier);
+}
+
+function getDeviceById(store: Store, identifier: string | null) {
+  return store
+    .getState()
+    .connections.devices.find((c) => c.serial === identifier);
 }

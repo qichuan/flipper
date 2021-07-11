@@ -25,8 +25,15 @@ export function usePluginInstance():
   return pluginInstance;
 }
 
+export function usePluginInstanceMaybe():
+  | SandyPluginInstance
+  | SandyDevicePluginInstance
+  | undefined {
+  return useContext(SandyPluginContext);
+}
+
 export function usePlugin<
-  Factory extends PluginFactory<any, any> | DevicePluginFactory
+  Factory extends PluginFactory<any, any> | DevicePluginFactory,
 >(plugin: Factory): ReturnType<Factory> {
   const pluginInstance = usePluginInstance();
   // In principle we don't *need* the plugin, but having it passed it makes sure the

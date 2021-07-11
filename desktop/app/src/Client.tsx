@@ -7,25 +7,20 @@
  * @format
  */
 
-import {PluginDefinition, FlipperPlugin, FlipperDevicePlugin} from './plugin';
+import {PluginDefinition} from './plugin';
 import BaseDevice, {OS} from './devices/BaseDevice';
 import {Logger} from './fb-interfaces/Logger';
 import {Store} from './reducers/index';
-import {setPluginState} from './reducers/pluginStates';
 import {Payload, ConnectionStatus} from 'rsocket-types';
 import {Flowable, Single} from 'rsocket-flowable';
 import {performance} from 'perf_hooks';
 import {reportPluginFailures} from './utils/metrics';
-import {notNull} from './utils/typeUtils';
 import {default as isProduction} from './utils/isProduction';
-import {registerPlugins} from './reducers/plugins';
-import createTableNativePlugin from './plugins/TableNativePlugin';
 import {EventEmitter} from 'events';
 import invariant from 'invariant';
 import {
   getPluginKey,
   defaultEnabledBackgroundPlugins,
-  isSandyPlugin,
 } from './utils/pluginUtils';
 import {processMessagesLater} from './utils/messageQueue';
 import {emitBytesReceived} from './dispatcher/tracking';
@@ -36,12 +31,16 @@ import {
   _SandyPluginInstance,
   _getFlipperLibImplementation,
 } from 'flipper-plugin';
-import {flipperMessagesClientPlugin} from './utils/self-inspection/plugins/FlipperMessagesClientPlugin';
 import {freeze} from 'immer';
 import GK from './fb-stubs/GK';
 import {message} from 'antd';
+import {
+  isFlipperMessageDebuggingEnabled,
+  registerFlipperDebugMessage,
+} from './chrome/FlipperMessages';
 
-type Plugins = Array<string>;
+type Plugins = Set<string>;
+type PluginsArr = Array<string>;
 
 export type ClientQuery = {
   app: string;
@@ -121,10 +120,7 @@ export default class Client extends EventEmitter {
   messageBuffer: Record<
     string /*pluginKey*/,
     {
-      plugin:
-        | typeof FlipperPlugin
-        | typeof FlipperDevicePlugin
-        | _SandyPluginInstance;
+      plugin: _SandyPluginInstance;
       messages: Params[];
     }
   > = {};
@@ -150,9 +146,9 @@ export default class Client extends EventEmitter {
     device: BaseDevice,
   ) {
     super();
-    this.connected.set(true);
-    this.plugins = plugins ? plugins : [];
-    this.backgroundPlugins = [];
+    this.connected.set(!!conn);
+    this.plugins = plugins ? plugins : new Set();
+    this.backgroundPlugins = new Set();
     this.connection = conn;
     this.id = id;
     this.query = query;
@@ -186,11 +182,11 @@ export default class Client extends EventEmitter {
   }
 
   supportsPlugin(pluginId: string): boolean {
-    return this.plugins.includes(pluginId);
+    return this.plugins.has(pluginId);
   }
 
   isBackgroundPlugin(pluginId: string) {
-    return this.backgroundPlugins.includes(pluginId);
+    return this.backgroundPlugins.has(pluginId);
   }
 
   isEnabledPlugin(pluginId: string) {
@@ -212,7 +208,7 @@ export default class Client extends EventEmitter {
     this.plugins.forEach((pluginId) =>
       this.startPluginIfNeeded(this.getPlugin(pluginId)),
     );
-    this.backgroundPlugins = await this.getBackgroundPlugins();
+    this.backgroundPlugins = new Set(await this.getBackgroundPlugins());
     this.backgroundPlugins.forEach((plugin) => {
       if (this.shouldConnectAsBackgroundPlugin(plugin)) {
         this.initPlugin(plugin);
@@ -223,7 +219,7 @@ export default class Client extends EventEmitter {
   initFromImport(initialStates: Record<string, Record<string, any>>): this {
     this.plugins.forEach((pluginId) => {
       const plugin = this.getPlugin(pluginId);
-      if (isSandyPlugin(plugin)) {
+      if (plugin) {
         // TODO: needs to be wrapped in error tracking T68955280
         this.sandyPluginStates.set(
           plugin.id,
@@ -242,26 +238,11 @@ export default class Client extends EventEmitter {
 
   // get the supported plugins
   async loadPlugins(): Promise<Plugins> {
-    const plugins = await this.rawCall<{plugins: Plugins}>(
+    const {plugins} = await this.rawCall<{plugins: Plugins}>(
       'getPlugins',
       false,
-    ).then((data) => data.plugins);
-    this.plugins = plugins;
-    const nativeplugins = plugins
-      .map((plugin) => /_nativeplugin_([^_]+)_([^_]+)/.exec(plugin))
-      .filter(notNull)
-      .map(([id, type, title]) => {
-        // TODO put this in another component, and make the "types" registerable
-        switch (type) {
-          case 'Table':
-            return createTableNativePlugin(id, title);
-          default: {
-            return null;
-          }
-        }
-      })
-      .filter(Boolean);
-    this.store.dispatch(registerPlugins(nativeplugins as any));
+    );
+    this.plugins = new Set(plugins);
     return plugins;
   }
 
@@ -271,7 +252,7 @@ export default class Client extends EventEmitter {
   ) {
     // start a plugin on start if it is a SandyPlugin, which is enabled, and doesn't have persisted state yet
     if (
-      isSandyPlugin(plugin) &&
+      plugin &&
       (isEnabled || defaultEnabledBackgroundPlugins.includes(plugin.id)) &&
       !this.sandyPluginStates.has(plugin.id)
     ) {
@@ -330,11 +311,11 @@ export default class Client extends EventEmitter {
   }
 
   // get the supported background plugins
-  async getBackgroundPlugins(): Promise<Plugins> {
+  async getBackgroundPlugins(): Promise<PluginsArr> {
     if (this.sdkVersion < 4) {
       return [];
     }
-    return await this.rawCall<{plugins: Plugins}>(
+    return this.rawCall<{plugins: PluginsArr}>(
       'getBackgroundPlugins',
       false,
     ).then((data) => data.plugins);
@@ -348,11 +329,11 @@ export default class Client extends EventEmitter {
       this.startPluginIfNeeded(this.getPlugin(pluginId)),
     );
     const newBackgroundPlugins = await this.getBackgroundPlugins();
-    this.backgroundPlugins = newBackgroundPlugins;
+    this.backgroundPlugins = new Set(newBackgroundPlugins);
     // diff the background plugin list, disconnect old, connect new ones
     oldBackgroundPlugins.forEach((plugin) => {
       if (
-        !newBackgroundPlugins.includes(plugin) &&
+        !this.backgroundPlugins.has(plugin) &&
         this.store
           .getState()
           .connections.enabledPlugins[this.query.app]?.includes(plugin)
@@ -362,7 +343,7 @@ export default class Client extends EventEmitter {
     });
     newBackgroundPlugins.forEach((plugin) => {
       if (
-        !oldBackgroundPlugins.includes(plugin) &&
+        !oldBackgroundPlugins.has(plugin) &&
         this.shouldConnectAsBackgroundPlugin(plugin)
       ) {
         this.initPlugin(plugin);
@@ -406,11 +387,8 @@ export default class Client extends EventEmitter {
 
       const {id, method} = data;
 
-      if (
-        data.params?.api != 'flipper-messages' &&
-        flipperMessagesClientPlugin.isConnected()
-      ) {
-        flipperMessagesClientPlugin.newMessage({
+      if (isFlipperMessageDebuggingEnabled()) {
+        registerFlipperDebugMessage({
           device: this.deviceSync?.displayTitle(),
           app: this.query.app,
           flipperInternalMethod: method,
@@ -438,6 +416,13 @@ export default class Client extends EventEmitter {
           const params: Params = data.params;
           const bytes = msg.length * 2; // string lengths are measured in UTF-16 units (not characters), so 2 bytes per char
           emitBytesReceived(params.api, bytes);
+          if (bytes > 5 * 1024 * 1024) {
+            console.warn(
+              `Plugin '${params.api}' received excessively large message for '${
+                params.method
+              }': ${Math.round(bytes / 1024)}kB`,
+            );
+          }
 
           const persistingPlugin: PluginDefinition | undefined =
             this.store.getState().plugins.clientPlugins.get(params.api) ||
@@ -607,8 +592,8 @@ export default class Client extends EventEmitter {
 
               this.onResponse(response, resolve, reject);
 
-              if (flipperMessagesClientPlugin.isConnected()) {
-                flipperMessagesClientPlugin.newMessage({
+              if (isFlipperMessageDebuggingEnabled()) {
+                registerFlipperDebugMessage({
                   device: this.deviceSync?.displayTitle(),
                   app: this.query.app,
                   flipperInternalMethod: method,
@@ -621,7 +606,10 @@ export default class Client extends EventEmitter {
             }
           },
           onError: (e) => {
-            reject(e);
+            // This is only called if the connection is dead. Not in expected
+            // and recoverable cases like a missing receiver/method.
+            this.disconnect();
+            reject(new Error('Connection disconnected: ' + e));
           },
         });
       } else {
@@ -632,8 +620,8 @@ export default class Client extends EventEmitter {
         );
       }
 
-      if (flipperMessagesClientPlugin.isConnected()) {
-        flipperMessagesClientPlugin.newMessage({
+      if (isFlipperMessageDebuggingEnabled()) {
+        registerFlipperDebugMessage({
           device: this.deviceSync?.displayTitle(),
           app: this.query.app,
           flipperInternalMethod: method,
@@ -694,8 +682,10 @@ export default class Client extends EventEmitter {
 
   initPlugin(pluginId: string) {
     this.activePlugins.add(pluginId);
-    this.rawSend('init', {plugin: pluginId});
-    this.sandyPluginStates.get(pluginId)?.connect();
+    if (this.connected.get()) {
+      this.rawSend('init', {plugin: pluginId});
+      this.sandyPluginStates.get(pluginId)?.connect();
+    }
   }
 
   deinitPlugin(pluginId: string) {
@@ -716,8 +706,8 @@ export default class Client extends EventEmitter {
       this.connection.fireAndForget({data: JSON.stringify(data)});
     }
 
-    if (flipperMessagesClientPlugin.isConnected()) {
-      flipperMessagesClientPlugin.newMessage({
+    if (isFlipperMessageDebuggingEnabled()) {
+      registerFlipperDebugMessage({
         device: this.deviceSync?.displayTitle(),
         app: this.query.app,
         flipperInternalMethod: method,
@@ -734,7 +724,21 @@ export default class Client extends EventEmitter {
     params?: Object,
   ): Promise<Object> {
     return reportPluginFailures(
-      this.rawCall('execute', fromPlugin, {api, method, params}),
+      this.rawCall<Object>('execute', fromPlugin, {
+        api,
+        method,
+        params,
+      }).catch((err) => {
+        // We only throw errors if the connection is still alive
+        // as connection-related ones aren't recoverable from
+        // user code.
+        if (this.connected.get()) {
+          throw err;
+        }
+        // This effectively preserves the previous behavior
+        // of ignoring disconnection-related call failures.
+        return {};
+      }),
       `Call-${method}`,
       api,
     );

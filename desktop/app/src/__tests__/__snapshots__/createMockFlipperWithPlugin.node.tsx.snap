@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`can create a Fake flipper 1`] = `
+exports[`can create a Fake flipper with legacy wrapper 1`] = `
 Object {
   "androidEmulators": Array [],
   "clients": Array [
@@ -37,6 +37,7 @@ Object {
     ],
   },
   "selectedApp": "TestApp#Android#MockAndroidDevice#serial",
+  "selectedAppPluginListRevision": 0,
   "selectedDevice": Object {
     "deviceType": "physical",
     "os": "Android",
@@ -52,20 +53,42 @@ Object {
 }
 `;
 
-exports[`can create a Fake flipper 2`] = `
+exports[`can create a Fake flipper with legacy wrapper 2`] = `
 Object {
   "bundledPlugins": Map {},
   "clientPlugins": Map {
-    "TestPlugin" => [Function],
+    "TestPlugin" => SandyPluginDefinition {
+      "details": Object {
+        "dir": "/Users/mock/.flipper/thirdparty/flipper-plugin-sample1",
+        "entry": "./test/index.js",
+        "id": "TestPlugin",
+        "isActivatable": true,
+        "isBundled": false,
+        "main": "dist/bundle.js",
+        "name": "flipper-plugin-hello",
+        "pluginType": "client",
+        "source": "src/index.js",
+        "specVersion": 2,
+        "title": "TestPlugin",
+        "version": "0.1.0",
+      },
+      "id": "TestPlugin",
+      "isDevicePlugin": false,
+      "module": Object {
+        "Component": [Function],
+        "plugin": [Function],
+      },
+    },
   },
   "devicePlugins": Map {},
   "disabledPlugins": Array [],
   "failedPlugins": Array [],
   "gatekeepedPlugins": Array [],
+  "initialised": false,
   "installedPlugins": Map {},
   "loadedPlugins": Map {},
   "marketplacePlugins": Array [],
   "selectedPlugins": Array [],
-  "uninstalledPlugins": Set {},
+  "uninstalledPluginNames": Set {},
 }
 `;

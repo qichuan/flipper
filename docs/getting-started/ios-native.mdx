@@ -3,10 +3,11 @@ id: ios-native
 title: Adding Flipper to iOS apps
 sidebar_label: Generic iOS apps
 ---
-import useBaseUrl from '@docusaurus/useBaseUrl';
-import Link from '@docusaurus/Link';
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+
+import useBaseUrl from "@docusaurus/useBaseUrl";
+import Link from "@docusaurus/Link";
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
 
 We support both Swift and Objective-C for Flipper with CocoaPods as build and distribution mechanism.
 
@@ -16,10 +17,10 @@ The following configuration assumed CocoaPods 1.9+.
 
 ```ruby
 project 'MyApp.xcodeproj'
-flipperkit_version = '0.84.0'
+flipperkit_version = '0.96.0'
 
 target 'MyApp' do
-  platform :ios, '9.0'
+  platform :ios, '10.0'
 
   # It is likely that you'll only want to include Flipper in debug builds,
   # in which case you add the `:configuration` directive:
@@ -39,7 +40,7 @@ target 'MyApp' do
   pod 'CocoaAsyncSocket', :configuration => 'Debug'
   # ...except, of course, those transitive dependencies that your
   # application itself depends, e.g.:
-  pod 'ComponentKit', '~> 0.30'
+  pod 'ComponentKit', '~> 0.31'
 
   # If you use `use_frameworks!` in your Podfile,
   # uncomment the below $static_framework array and also
@@ -146,14 +147,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 ## Enabling plugins
 
-Finally, you need to add plugins to your Flipper client. Above, we have only added the Layout Inspector plugin to get you started. See <Link to={useBaseUrl("/docs/setup/network-plugin")}>Network Plugin</Link> and <Link to={useBaseUrl("/docs/setup/layout-plugin")}>Layout Inspector Plugin</Link> for information on how to add them, and also enable Litho or ComponentKit support. You can check the sample apps in the [GitHub repo](https://github.com/facebook/flipper) for examples of integrating other plugins.
+Finally, you need to add plugins to your Flipper client. Above, we have only added the Layout Inspector plugin to get you started. See <Link to={useBaseUrl("/docs/setup/plugins/network")}>Network Plugin</Link> and <Link to={useBaseUrl("/docs/setup/layout-plugin")}>Layout Inspector Plugin</Link> for information on how to add them, and also enable Litho or ComponentKit support. You can check the sample apps in the [GitHub repo](https://github.com/facebook/flipper) for examples of integrating other plugins.
 
 ## Having trouble?
 
 See the <Link to={useBaseUrl("/docs/troubleshooting")}>troubleshooting page</Link> for help with known problems.
-
-<div class="warning">
-
-On iOS, we currently do not support connecting to physical devices.
-
-</div>

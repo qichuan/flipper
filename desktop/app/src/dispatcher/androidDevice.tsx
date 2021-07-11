@@ -20,6 +20,7 @@ import {ServerPorts} from '../reducers/application';
 import {Client as ADBClient} from 'adbkit';
 import {addErrorNotification} from '../reducers/notifications';
 import {destroyDevice} from '../reducers/connections';
+import {join} from 'path';
 
 function createDevice(
   adbClient: ADBClient,
@@ -47,16 +48,9 @@ function createDevice(
           const isKaiOSDevice = Object.keys(props).some(
             (name) => name.startsWith('kaios') || name.startsWith('ro.kaios'),
           );
-          const androidLikeDevice = new (isKaiOSDevice
-            ? KaiOSDevice
-            : AndroidDevice)(
-            device.id,
-            type,
-            name,
-            adbClient,
-            abiList,
-            sdkVersion,
-          );
+          const androidLikeDevice = new (
+            isKaiOSDevice ? KaiOSDevice : AndroidDevice
+          )(device.id, type, name, adbClient, abiList, sdkVersion);
           if (ports) {
             await androidLikeDevice
               .reverse([ports.secure, ports.insecure])
@@ -67,6 +61,15 @@ function createDevice(
                   `Failed to reverse-proxy ports on device ${androidLikeDevice.serial}: ${e}`,
                 );
               });
+          }
+          if (type === 'physical') {
+            // forward port for React DevTools, which is fixed on React Native
+            await androidLikeDevice.reverse([8097]).catch((e) => {
+              console.warn(
+                `Failed to reverse-proxy React DevTools port 8097 on ${androidLikeDevice.serial}`,
+                e,
+              );
+            });
           }
           resolve(androidLikeDevice);
         } catch (e) {
@@ -138,15 +141,17 @@ export default (store: Store, logger: Logger) => {
   const watchAndroidDevices = () => {
     // get emulators
     promisify(which)('emulator')
-      .catch(
-        () =>
-          `${
-            process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || ''
-          }/tools/emulator`,
+      .catch(() =>
+        join(
+          process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || '',
+          'tools',
+          'emulator',
+        ),
       )
       .then((emulatorPath) => {
-        child_process.exec(
-          `${emulatorPath} -list-avds`,
+        child_process.execFile(
+          emulatorPath as string,
+          ['-list-avds'],
           (error: Error | null, data: string | null) => {
             if (error != null || data == null) {
               console.warn('List AVD failed: ', error);
@@ -159,9 +164,12 @@ export default (store: Store, logger: Logger) => {
             });
           },
         );
+      })
+      .catch((err) => {
+        console.warn('Failed to query AVDs:', err);
       });
 
-    getAdbClient(store)
+    return getAdbClient(store)
       .then((client) => {
         client
           .trackDevices()

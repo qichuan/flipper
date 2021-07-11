@@ -15,7 +15,7 @@ import GK from './fb-stubs/GK';
 import {init as initLogger} from './fb-stubs/Logger';
 import {SandyApp} from './sandy-chrome/SandyApp';
 import setupPrefetcher from './fb-stubs/Prefetcher';
-import {persistStore} from 'redux-persist';
+import {Persistor, persistStore} from 'redux-persist';
 import {Store} from './reducers/index';
 import dispatcher from './dispatcher/index';
 import TooltipProvider from './ui/components/TooltipProvider';
@@ -24,12 +24,11 @@ import {initLauncherHooks} from './utils/launcher';
 import {setPersistor} from './utils/persistor';
 import React from 'react';
 import path from 'path';
-import {store} from './store';
+import {getStore} from './store';
 import {cache} from '@emotion/css';
 import {CacheProvider} from '@emotion/react';
 import {enableMapSet} from 'immer';
 import os from 'os';
-import {PopoverProvider} from './ui/components/PopoverProvider';
 import {initializeFlipperLibImplementation} from './utils/flipperLibImplementation';
 import {enableConsoleHook} from './chrome/ConsoleLogs';
 import {sideEffect} from './utils/sideEffect';
@@ -49,6 +48,8 @@ import styled from '@emotion/styled';
 import {CopyOutlined} from '@ant-design/icons';
 import {clipboard} from 'electron/common';
 import {getVersionString} from './utils/versionString';
+import {PersistGate} from 'redux-persist/integration/react';
+import {ipcRenderer} from 'electron';
 
 if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   // By default Node.JS has its internal certificate storage and doesn't use
@@ -59,14 +60,12 @@ if (process.env.NODE_ENV === 'development' && os.platform() === 'darwin') {
   global.electronRequire('mac-ca');
 }
 
-const logger = initLogger(store);
-
 enableMapSet();
 
 GK.init();
 
 class AppFrame extends React.Component<
-  {logger: Logger},
+  {logger: Logger; persistor: Persistor},
   {error: any; errorInfo: any}
 > {
   state = {error: undefined as any, errorInfo: undefined as any};
@@ -82,7 +81,7 @@ class AppFrame extends React.Component<
   }
 
   render() {
-    const {logger} = this.props;
+    const {logger, persistor} = this.props;
     return this.state.error ? (
       <Layout.Container grow center pad={80} style={{height: '100%'}}>
         <Layout.Top style={{maxWidth: 800, height: '100%'}}>
@@ -127,18 +126,18 @@ class AppFrame extends React.Component<
       </Layout.Container>
     ) : (
       <_LoggerContext.Provider value={logger}>
-        <Provider store={store}>
-          <CacheProvider value={cache}>
-            <TooltipProvider>
-              <PopoverProvider>
+        <Provider store={getStore()}>
+          <PersistGate persistor={persistor}>
+            <CacheProvider value={cache}>
+              <TooltipProvider>
                 <ContextMenuProvider>
                   <_NuxManagerContext.Provider value={_createNuxManager()}>
                     <SandyApp />
                   </_NuxManagerContext.Provider>
                 </ContextMenuProvider>
-              </PopoverProvider>
-            </TooltipProvider>
-          </CacheProvider>
+              </TooltipProvider>
+            </CacheProvider>
+          </PersistGate>
         </Provider>
       </_LoggerContext.Provider>
     );
@@ -181,17 +180,29 @@ function setProcessState(store: Store) {
 }
 
 function init() {
+  const store = getStore();
+  const logger = initLogger(store);
+
+  // rehydrate app state before exposing init
+  const persistor = persistStore(store, undefined, () => {
+    // Make sure process state is set before dispatchers run
+    setProcessState(store);
+    dispatcher(store, logger);
+  });
+
+  setPersistor(persistor);
+
   initializeFlipperLibImplementation(store, logger);
   _setGlobalInteractionReporter((r) => {
     logger.track('usage', 'interaction', r);
     if (!isProduction()) {
       const msg = `[interaction] ${r.scope}:${r.action} in ${r.duration}ms`;
       if (r.success) console.log(msg);
-      else console.error(msg, r.error);
+      else console.warn(msg, r.error);
     }
   });
   ReactDOM.render(
-    <AppFrame logger={logger} />,
+    <AppFrame logger={logger} persistor={persistor} />,
     document.getElementById('root'),
   );
   initLauncherHooks(config(), store);
@@ -201,31 +212,25 @@ function init() {
   // listen to settings and load the right theme
   sideEffect(
     store,
-    {name: 'loadTheme', fireImmediately: true, throttleMs: 500},
+    {name: 'loadTheme', fireImmediately: false, throttleMs: 500},
     (state) => ({
       dark: state.settingsState.darkMode,
     }),
     (theme) => {
-      (document.getElementById(
-        'flipper-theme-import',
-      ) as HTMLLinkElement).href = `themes/${
-        theme.dark ? 'dark' : 'light'
-      }.css`;
+      (
+        document.getElementById('flipper-theme-import') as HTMLLinkElement
+      ).href = `themes/${theme.dark ? 'dark' : 'light'}.css`;
+      ipcRenderer.send('setTheme', theme.dark ? 'dark' : 'light');
     },
   );
 }
 
-// rehydrate app state before exposing init
-const persistor = persistStore(store, undefined, () => {
-  // Make sure process state is set before dispatchers run
-  setProcessState(store);
-  dispatcher(store, logger);
-  // make init function callable from outside
-  window.Flipper.init = init;
+setImmediate(() => {
+  // make sure all modules are loaded
+  // @ts-ignore
+  window.flipperInit = init;
   window.dispatchEvent(new Event('flipper-store-ready'));
 });
-
-setPersistor(persistor);
 
 const CodeBlock = styled(Input.TextArea)({
   ...theme.monospace,

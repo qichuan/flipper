@@ -15,18 +15,21 @@ import {
 } from '../plugins';
 import {FlipperPlugin, FlipperDevicePlugin, BaseAction} from '../../plugin';
 import {InstalledPluginDetails} from 'flipper-plugin-lib';
+import {wrapSandy} from '../../test-utils/createMockFlipperWithPlugin';
 
-const testPlugin = class extends FlipperPlugin<any, BaseAction, any> {
+const testPluginOrig = class extends FlipperPlugin<any, BaseAction, any> {
   static id = 'TestPlugin';
 };
+const testPlugin = wrapSandy(testPluginOrig);
 
-const testDevicePlugin = class extends FlipperDevicePlugin<
+const testDevicePluginOrig = class extends FlipperDevicePlugin<
   any,
   BaseAction,
   any
 > {
   static id = 'TestDevicePlugin';
 };
+const testDevicePlugin = wrapSandy(testDevicePluginOrig);
 
 test('add clientPlugin', () => {
   const res = reducer(
@@ -40,8 +43,9 @@ test('add clientPlugin', () => {
       disabledPlugins: [],
       selectedPlugins: [],
       marketplacePlugins: [],
-      uninstalledPlugins: new Set(),
+      uninstalledPluginNames: new Set(),
       installedPlugins: new Map(),
+      initialised: false,
     },
     registerPlugins([testPlugin]),
   );
@@ -60,8 +64,9 @@ test('add devicePlugin', () => {
       disabledPlugins: [],
       selectedPlugins: [],
       marketplacePlugins: [],
-      uninstalledPlugins: new Set(),
+      uninstalledPluginNames: new Set(),
       installedPlugins: new Map(),
+      initialised: false,
     },
     registerPlugins([testDevicePlugin]),
   );
@@ -80,8 +85,9 @@ test('do not add plugin twice', () => {
       disabledPlugins: [],
       selectedPlugins: [],
       marketplacePlugins: [],
-      uninstalledPlugins: new Set(),
+      uninstalledPluginNames: new Set(),
       installedPlugins: new Map(),
+      initialised: false,
     },
     registerPlugins([testPlugin, testPlugin]),
   );
@@ -117,7 +123,8 @@ test('add gatekeeped plugin', () => {
       selectedPlugins: [],
       marketplacePlugins: [],
       installedPlugins: new Map(),
-      uninstalledPlugins: new Set(),
+      uninstalledPluginNames: new Set(),
+      initialised: false,
     },
     addGatekeepedPlugins(gatekeepedPlugins),
   );

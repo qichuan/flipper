@@ -27,11 +27,14 @@ import {Store} from '../reducers/index';
 import Client, {ClientQuery} from '../Client';
 
 import {Logger} from '../fb-interfaces/Logger';
-import {PluginDefinition} from '../plugin';
+import {FlipperDevicePlugin, FlipperPlugin, PluginDefinition} from '../plugin';
 import PluginContainer from '../PluginContainer';
 import {getPluginKey, isDevicePluginDefinition} from '../utils/pluginUtils';
 import MockFlipper from './MockFlipper';
 import {switchPlugin} from '../reducers/pluginManager';
+import {createSandyPluginFromClassicPlugin} from '../dispatcher/plugins';
+import {createMockActivatablePluginDetails} from '../utils/testUtils';
+import {_SandyPluginDefinition} from 'flipper-plugin';
 
 export type MockFlipperResult = {
   client: Client;
@@ -49,6 +52,12 @@ export type MockFlipperResult = {
   ): Promise<Client>;
   logger: Logger;
   togglePlugin(plugin?: string): void;
+  selectPlugin(
+    id?: string,
+    client?: Client,
+    device?: BaseDevice,
+    deepLinkPayload?: any,
+  ): void;
 };
 
 type MockOptions = Partial<{
@@ -57,11 +66,12 @@ type MockOptions = Partial<{
    * the base implementation will be used
    */
   onSend?: (pluginId: string, method: string, params?: object) => any;
-  additionalPlugins?: PluginDefinition[];
+  additionalPlugins?: (PluginDefinition | LegacyPluginDefinition)[];
   dontEnableAdditionalPlugins?: true;
   asBackgroundPlugin?: true;
   supportedPlugins?: string[];
   device?: BaseDevice;
+  archivedDevice?: boolean;
 }>;
 
 function isPluginEnabled(
@@ -79,18 +89,44 @@ function isPluginEnabled(
   );
 }
 
+export type LegacyPluginDefinition =
+  | typeof FlipperDevicePlugin
+  | typeof FlipperPlugin;
+
+export function wrapSandy(
+  clazz: PluginDefinition | LegacyPluginDefinition,
+): PluginDefinition {
+  return clazz instanceof _SandyPluginDefinition
+    ? clazz
+    : createSandyPluginFromClassicPlugin(
+        createMockActivatablePluginDetails({
+          id: clazz.id,
+          title: clazz.title ?? clazz.id,
+          pluginType:
+            clazz.prototype instanceof FlipperDevicePlugin
+              ? 'device'
+              : 'client',
+        }),
+        clazz,
+      );
+}
+
 export async function createMockFlipperWithPlugin(
-  pluginClazz: PluginDefinition,
+  pluginClazzOrig: PluginDefinition | LegacyPluginDefinition,
   options?: MockOptions,
 ): Promise<MockFlipperResult> {
+  const pluginClazz = wrapSandy(pluginClazzOrig);
+  const additionalPlugins = options?.additionalPlugins?.map(wrapSandy) ?? [];
+
   const mockFlipper = new MockFlipper();
   await mockFlipper.init({
-    plugins: [pluginClazz, ...(options?.additionalPlugins ?? [])],
+    plugins: [pluginClazz, ...additionalPlugins],
   });
   const logger = mockFlipper.logger;
   const store = mockFlipper.store;
 
-  const createDevice = (serial: string) => mockFlipper.createDevice({serial});
+  const createDevice = (serial: string, archived?: boolean) =>
+    mockFlipper.createDevice({serial, archived});
   const createClient = async (
     device: BaseDevice,
     name: string,
@@ -105,6 +141,7 @@ export async function createMockFlipperWithPlugin(
       supportedPlugins: options?.supportedPlugins,
       backgroundPlugins: options?.asBackgroundPlugin ? [pluginClazz.id] : [],
     });
+
     // enable the plugin
     if (!isPluginEnabled(store, pluginClazz, name)) {
       store.dispatch(
@@ -114,8 +151,9 @@ export async function createMockFlipperWithPlugin(
         }),
       );
     }
+
     if (!options?.dontEnableAdditionalPlugins) {
-      options?.additionalPlugins?.forEach((plugin) => {
+      additionalPlugins.forEach((plugin) => {
         if (!isPluginEnabled(store, plugin, name)) {
           store.dispatch(
             switchPlugin({
@@ -131,25 +169,42 @@ export async function createMockFlipperWithPlugin(
 
   const device = options?.device
     ? mockFlipper.loadDevice(options?.device)
-    : createDevice('serial');
+    : createDevice('serial', options?.archivedDevice);
   const client = await createClient(device, 'TestApp');
 
   store.dispatch(selectDevice(device));
   store.dispatch(selectClient(client.id));
 
-  store.dispatch(
-    selectPlugin({
-      selectedPlugin: pluginClazz.id,
-      selectedApp: client.query.app,
-      deepLinkPayload: null,
-      selectedDevice: device,
-    }),
-  );
+  let lastSelected: string | undefined = undefined;
+
+  function selectPluginImpl(
+    id = pluginClazz.id,
+    theClient = client,
+    theDevice = device,
+    deepLinkPayload = null,
+  ) {
+    if (lastSelected) {
+      client.deinitPlugin(lastSelected);
+    }
+    store.dispatch(
+      selectPlugin({
+        selectedPlugin: id,
+        selectedApp: theClient.query.app,
+        deepLinkPayload,
+        selectedDevice: theDevice,
+      }),
+    );
+    client.initPlugin(pluginClazz.id); // simulates plugin being mounted
+    lastSelected = pluginClazz.id;
+  }
+
+  selectPluginImpl();
 
   return {
     client,
     device: device as any,
     store,
+    selectPlugin: selectPluginImpl,
     sendError(error: any, actualClient = client) {
       actualClient.onMessage(
         JSON.stringify({
@@ -194,7 +249,7 @@ export async function createMockFlipperWithPlugin(
 type Renderer = RenderResult<typeof queries>;
 
 export async function renderMockFlipperWithPlugin(
-  pluginClazz: PluginDefinition,
+  pluginClazzOrig: PluginDefinition | LegacyPluginDefinition,
   options?: MockOptions,
 ): Promise<
   MockFlipperResult & {
@@ -202,6 +257,7 @@ export async function renderMockFlipperWithPlugin(
     act: (cb: () => void) => void;
   }
 > {
+  const pluginClazz = wrapSandy(pluginClazzOrig);
   const args = await createMockFlipperWithPlugin(pluginClazz, options);
 
   function selectTestPlugin(store: Store, client: Client) {

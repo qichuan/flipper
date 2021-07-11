@@ -10,31 +10,21 @@
 import {Store} from '../reducers/index';
 import {Logger} from '../fb-interfaces/Logger';
 import {PluginNotification} from '../reducers/notifications';
-import {PluginDefinition} from '../plugin';
-import {setStaticView} from '../reducers/connections';
 import {ipcRenderer, IpcRendererEvent} from 'electron';
 import {
-  setActiveNotifications,
   updatePluginBlocklist,
   updateCategoryBlocklist,
 } from '../reducers/notifications';
 import {textContent} from '../utils/index';
-import GK from '../fb-stubs/GK';
-import {deconstructPluginKey} from '../utils/clientUtils';
-import NotificationScreen from '../chrome/NotificationScreen';
-import {getPluginTitle, isSandyPlugin} from '../utils/pluginUtils';
+import {getPluginTitle} from '../utils/pluginUtils';
 import {sideEffect} from '../utils/sideEffect';
+import {openNotification} from '../sandy-chrome/notification/Notification';
 
 type NotificationEvents = 'show' | 'click' | 'close' | 'reply' | 'action';
 const NOTIFICATION_THROTTLE = 5 * 1000; // in milliseconds
 
 export default (store: Store, logger: Logger) => {
-  if (GK.get('flipper_disable_notifications')) {
-    return;
-  }
-
   const knownNotifications: Set<string> = new Set();
-  const knownPluginStates: Map<string, Object> = new Map();
   const lastNotificationTime: Map<string, number> = new Map();
 
   ipcRenderer.on(
@@ -46,12 +36,7 @@ export default (store: Store, logger: Logger) => {
       arg: null | string | number,
     ) => {
       if (eventName === 'click' || (eventName === 'action' && arg === 0)) {
-        store.dispatch(
-          setStaticView(
-            NotificationScreen,
-            pluginNotification.notification.action ?? null,
-          ),
-        );
+        openNotification(store, pluginNotification);
       } else if (eventName === 'action') {
         if (arg === 1 && pluginNotification.notification.category) {
           // Hide similar (category)
@@ -89,63 +74,18 @@ export default (store: Store, logger: Logger) => {
   sideEffect(
     store,
     {name: 'notifications', throttleMs: 500},
-    ({notifications, pluginStates, plugins}) => ({
+    ({notifications, plugins}) => ({
       notifications,
-      pluginStates,
       devicePlugins: plugins.devicePlugins,
       clientPlugins: plugins.clientPlugins,
     }),
-    ({notifications, pluginStates, devicePlugins, clientPlugins}, store) => {
+    ({notifications, devicePlugins, clientPlugins}, store) => {
       function getPlugin(name: string) {
         return devicePlugins.get(name) ?? clientPlugins.get(name);
       }
 
-      Object.keys(pluginStates).forEach((key) => {
-        if (knownPluginStates.get(key) !== pluginStates[key]) {
-          knownPluginStates.set(key, pluginStates[key]);
-          const plugin = deconstructPluginKey(key);
-          const pluginName = plugin.pluginName;
-          const client = plugin.client;
-
-          if (!pluginName) {
-            return;
-          }
-
-          const persistingPlugin: undefined | PluginDefinition = getPlugin(
-            pluginName,
-          );
-          // TODO: add support for Sandy plugins T68683442
-          if (
-            persistingPlugin &&
-            !isSandyPlugin(persistingPlugin) &&
-            persistingPlugin.getActiveNotifications
-          ) {
-            try {
-              const notifications = persistingPlugin.getActiveNotifications(
-                pluginStates[key],
-              );
-              store.dispatch(
-                setActiveNotifications({
-                  notifications,
-                  client,
-                  pluginId: pluginName,
-                }),
-              );
-            } catch (e) {
-              console.error(
-                'Failed to compute notifications for plugin ' + pluginName,
-                e,
-              );
-            }
-          }
-        }
-      });
-
-      const {
-        activeNotifications,
-        blocklistedPlugins,
-        blocklistedCategories,
-      } = notifications;
+      const {activeNotifications, blocklistedPlugins, blocklistedCategories} =
+        notifications;
 
       activeNotifications
         .map((n) => ({

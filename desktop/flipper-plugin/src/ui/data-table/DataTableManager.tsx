@@ -10,8 +10,7 @@
 import type {DataTableColumn} from './DataTable';
 import {Percentage} from '../../utils/widthUtils';
 import {MutableRefObject, Reducer} from 'react';
-import {DataSource} from '../../state/DataSource';
-import {DataSourceVirtualizer} from './DataSourceRenderer';
+import {DataSource, DataSourceVirtualizer} from '../../data-source/index';
 import produce, {castDraft, immerable, original} from 'immer';
 
 export type OnColumnResize = (id: string, size: number | Percentage) => void;
@@ -60,6 +59,14 @@ type DataManagerActions<T> =
       {
         nextIndex: number | ((currentIndex: number) => number);
         addToSelection?: boolean;
+        allowUnselect?: boolean;
+      }
+    >
+  | Action<
+      'selectItemById',
+      {
+        id: string;
+        addToSelection?: boolean;
       }
     >
   | Action<
@@ -78,6 +85,7 @@ type DataManagerActions<T> =
     >
   | Action<'removeColumnFilter', {column: keyof T; index: number}>
   | Action<'toggleColumnFilter', {column: keyof T; index: number}>
+  | Action<'setColumnFilterInverse', {column: keyof T; inversed: boolean}>
   | Action<'setColumnFilterFromSelection', {column: keyof T}>
   | Action<'appliedInitialScroll'>
   | Action<'toggleUseRegex'>
@@ -91,6 +99,7 @@ type DataManagerConfig<T> = {
   onSelect: undefined | ((item: T | undefined, items: T[]) => void);
   virtualizerRef: MutableRefObject<DataSourceVirtualizer | undefined>;
   autoScroll?: boolean;
+  enablePersistSettings?: boolean;
 };
 
 type DataManagerState<T> = {
@@ -155,10 +164,26 @@ export const dataTableManagerReducer = produce<
       break;
     }
     case 'selectItem': {
-      const {nextIndex, addToSelection} = action;
+      const {nextIndex, addToSelection, allowUnselect} = action;
       draft.selection = castDraft(
-        computeSetSelection(draft.selection, nextIndex, addToSelection),
+        computeSetSelection(
+          draft.selection,
+          nextIndex,
+          addToSelection,
+          allowUnselect,
+        ),
       );
+      break;
+    }
+    case 'selectItemById': {
+      const {id, addToSelection} = action;
+      // TODO: fix that this doesn't jumpt selection if items are shifted! sorting is swapped etc
+      const idx = config.dataSource.getIndexOfKey(id);
+      if (idx !== -1) {
+        draft.selection = castDraft(
+          computeSetSelection(draft.selection, idx, addToSelection),
+        );
+      }
       break;
     }
     case 'addRangeToSelection': {
@@ -194,9 +219,14 @@ export const dataTableManagerReducer = produce<
       f.enabled = !f.enabled;
       break;
     }
+    case 'setColumnFilterInverse': {
+      draft.columns.find((c) => c.key === action.column)!.inversed =
+        action.inversed;
+      break;
+    }
     case 'setColumnFilterFromSelection': {
       const items = getSelectedItems(
-        config.dataSource as DataSource,
+        config.dataSource as DataSource<any>,
         draft.selection,
       );
       items.forEach((item, index) => {
@@ -235,18 +265,21 @@ export type DataTableManager<T> = {
   selectItem(
     index: number | ((currentSelection: number) => number),
     addToSelection?: boolean,
+    allowUnselect?: boolean,
   ): void;
   addRangeToSelection(
     start: number,
     end: number,
     allowUnselect?: boolean,
   ): void;
+  selectItemById(id: string, addToSelection?: boolean): void;
   clearSelection(): void;
   getSelectedItem(): T | undefined;
   getSelectedItems(): readonly T[];
   toggleColumnVisibility(column: keyof T): void;
   sortColumn(column: keyof T, direction?: SortDirection): void;
   setSearchValue(value: string): void;
+  dataSource: DataSource<T>;
 };
 
 export function createDataTableManager<T>(
@@ -258,8 +291,16 @@ export function createDataTableManager<T>(
     reset() {
       dispatch({type: 'reset'});
     },
-    selectItem(index: number, addToSelection = false) {
-      dispatch({type: 'selectItem', nextIndex: index, addToSelection});
+    selectItem(index: number, addToSelection = false, allowUnselect = false) {
+      dispatch({
+        type: 'selectItem',
+        nextIndex: index,
+        addToSelection,
+        allowUnselect,
+      });
+    },
+    selectItemById(id, addToSelection = false) {
+      dispatch({type: 'selectItemById', id, addToSelection});
     },
     addRangeToSelection(start, end, allowUnselect = false) {
       dispatch({type: 'addRangeToSelection', start, end, allowUnselect});
@@ -282,6 +323,7 @@ export function createDataTableManager<T>(
     setSearchValue(value) {
       dispatch({type: 'setSearchValue', value});
     },
+    dataSource,
   };
 }
 
@@ -291,7 +333,9 @@ export function createInitialState<T>(
   const storageKey = `${config.scope}:DataTable:${config.defaultColumns
     .map((c) => c.key)
     .join(',')}`;
-  const prefs = loadStateFromStorage(storageKey);
+  const prefs = config.enablePersistSettings
+    ? loadStateFromStorage(storageKey)
+    : undefined;
   let initialColumns = computeInitialColumns(config.defaultColumns);
   if (prefs) {
     // merge prefs with the default column config
@@ -378,7 +422,7 @@ export function savePreferences(
   state: DataManagerState<any>,
   scrollOffset: number,
 ) {
-  if (!state.config.scope) {
+  if (!state.config.scope || !state.config.enablePersistSettings) {
     return;
   }
   const prefs: PersistedState = {
@@ -420,8 +464,23 @@ function loadStateFromStorage(storageKey: string): PersistedState | undefined {
 function computeInitialColumns(
   columns: DataTableColumn<any>[],
 ): DataTableColumn<any>[] {
+  const visibleColumnCount = columns.filter((c) => c.visible !== false).length;
+  const columnsWithoutWidth = columns.filter(
+    (c) => c.visible !== false && c.width === undefined,
+  ).length;
+
   return columns.map((c) => ({
     ...c,
+    width:
+      c.width ??
+      // if the width is not set, and there are multiple columns with unset widths,
+      // there will be multiple columns ith the same flex weight (1), meaning that
+      // they will all resize a best fits in a specifc row.
+      // To address that we distribute space equally
+      // (this need further fine tuning in the future as with a subset of fixed columns width can become >100%)
+      (columnsWithoutWidth > 1
+        ? `${Math.floor(100 / visibleColumnCount)}%`
+        : undefined),
     filters:
       c.filters?.map((f) => ({
         ...f,
@@ -451,14 +510,15 @@ export function computeDataTableFilter(
 
   return function dataTableFilter(item: any) {
     for (const column of filteringColumns) {
-      if (
-        !column.filters!.some(
-          (f) =>
-            f.enabled &&
-            String(item[column.key]).toLowerCase().includes(f.value),
-        )
-      ) {
-        return false; // there are filters, but none matches
+      const rowMatchesFilter = column.filters!.some(
+        (f) =>
+          f.enabled && String(item[column.key]).toLowerCase().includes(f.value),
+      );
+      if (column.inversed && rowMatchesFilter) {
+        return false;
+      }
+      if (!column.inversed && !rowMatchesFilter) {
+        return false;
       }
     }
     return Object.values(item).some((v) =>
@@ -481,11 +541,17 @@ export function computeSetSelection(
   base: Selection,
   nextIndex: number | ((currentIndex: number) => number),
   addToSelection?: boolean,
+  allowUnselect?: boolean,
 ): Selection {
   const newIndex =
     typeof nextIndex === 'number' ? nextIndex : nextIndex(base.current);
   // special case: toggle existing selection off
-  if (!addToSelection && base.items.size === 1 && base.current === newIndex) {
+  if (
+    !addToSelection &&
+    allowUnselect &&
+    base.items.size === 1 &&
+    base.current === newIndex
+  ) {
     return emptySelection;
   }
   if (newIndex < 0) {

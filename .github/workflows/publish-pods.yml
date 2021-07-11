@@ -21,7 +21,7 @@ jobs:
         run: ./scripts/update-pod-versions.sh ./ ./Flipper.podspec
 
       - name: Push Flipper
-        run: pod trunk push Flipper.podspec --use-libraries --allow-warnings --verbose --skip-import-validation
+        run: ./scripts/publish-flipper-pods.sh ./ Flipper
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
 
@@ -41,9 +41,7 @@ jobs:
         run: ./scripts/update-pod-versions.sh ./ ./FlipperKit.podspec
 
       - name: Push FlipperKit
-        run: |
-          # Retry publishing FlipperKit 20 times. Putting this hack unless we have cocoapods 1.10. More information related to the bug https://github.com/CocoaPods/CocoaPods/issues/9502#issuecomment-579486258
-          for i in {1..20}; do pod trunk push FlipperKit.podspec --use-libraries --allow-warnings --verbose --skip-import-validation --synchronous && break || sleep 30; done
+        run: ./scripts/publish-flipper-pods.sh ./ FlipperKit
         env:
           COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
 
@@ -67,6 +65,9 @@ jobs:
 
       - name: Update RN getting started guide
         run: ./scripts/update-pod-versions.sh ./ ./docs/getting-started/react-native-ios.mdx
+
+      - name: Update ReactNativeFlipperExample
+        run: ./scripts/update-pod-versions.sh ./ ./react-native/ReactNativeFlipperExample/ios/Podfile
 
       - name: Install Dependencies
         run: pod repo update
@@ -93,6 +94,14 @@ jobs:
           for i in {1..20}; do pod update && break || sleep 30; done
           ls
 
+      - name: Update ReactNativeFlipperExample Podfile.lock
+        run: |
+          cd react-native/ReactNativeFlipperExample
+          yarn install
+          cd ios
+          pod update --repo-update
+          ls
+
       # Followed this https://github.com/peter-evans/create-pull-request/blob/master/docs/concepts-guidelines.md#creating-pull-requests-on-tag-push
       - name: Create a temporary tag branch
         run: |
@@ -114,7 +123,7 @@ jobs:
           git branch
 
       - name: Create PR to Update Podfile.lock
-        uses: peter-evans/create-pull-request@v2
+        uses: peter-evans/create-pull-request@v3
         with:
           title: "Automated: Update Podfile.lock"
           body: |

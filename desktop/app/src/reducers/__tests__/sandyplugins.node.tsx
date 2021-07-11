@@ -9,7 +9,6 @@
 
 import {createMockFlipperWithPlugin} from '../../test-utils/createMockFlipperWithPlugin';
 import {Store, Client} from '../../';
-import {selectPlugin} from '../../reducers/connections';
 import {registerPlugins} from '../../reducers/plugins';
 import {
   _SandyPluginDefinition,
@@ -66,34 +65,18 @@ function starTestPlugin(store: Store, client: Client) {
   );
 }
 
-function selectTestPlugin(store: Store, client: Client) {
-  store.dispatch(
-    selectPlugin({
-      selectedPlugin: TestPlugin.id,
-      selectedApp: client.query.app,
-      deepLinkPayload: null,
-      selectedDevice: store.getState().connections.selectedDevice!,
-    }),
-  );
-}
-
 test('it should initialize starred sandy plugins', async () => {
-  const {client, store} = await createMockFlipperWithPlugin(TestPlugin);
+  const {client} = await createMockFlipperWithPlugin(TestPlugin);
 
   // already started, so initialized immediately
   expect(initialized).toBe(true);
   expect(client.sandyPluginStates.get(TestPlugin.id)).toBeInstanceOf(
     _SandyPluginInstance,
   );
-  const instanceApi: PluginApi = client.sandyPluginStates.get(TestPlugin.id)!
-    .instanceApi;
+  const instanceApi: PluginApi = client.sandyPluginStates.get(
+    TestPlugin.id,
+  )!.instanceApi;
 
-  expect(instanceApi.connectStub).toBeCalledTimes(0);
-  selectTestPlugin(store, client);
-
-  // without rendering, non-bg plugins won't connect automatically,
-  // so this isn't the best test, but PluginContainer tests do test that part of the lifecycle
-  client.initPlugin(TestPlugin.id);
   expect(instanceApi.connectStub).toBeCalledTimes(1);
   client.deinitPlugin(TestPlugin.id);
   expect(instanceApi.disconnectStub).toBeCalledTimes(1);
@@ -104,8 +87,9 @@ test('it should cleanup a plugin if disabled', async () => {
   const {client, store} = await createMockFlipperWithPlugin(TestPlugin);
 
   expect(TestPlugin.asPluginModule().plugin).toBeCalledTimes(1);
-  const pluginInstance: PluginApi = client.sandyPluginStates.get(TestPlugin.id)!
-    .instanceApi;
+  const pluginInstance: PluginApi = client.sandyPluginStates.get(
+    TestPlugin.id,
+  )!.instanceApi;
   expect(pluginInstance.destroyStub).toHaveBeenCalledTimes(0);
   client.initPlugin(TestPlugin.id);
   expect(pluginInstance.connectStub).toHaveBeenCalledTimes(1);
@@ -210,8 +194,9 @@ test('it trigger hooks for background plugins', async () => {
   const {client} = await createMockFlipperWithPlugin(TestPlugin, {
     asBackgroundPlugin: true,
   });
-  const pluginInstance: PluginApi = client.sandyPluginStates.get(TestPlugin.id)!
-    .instanceApi;
+  const pluginInstance: PluginApi = client.sandyPluginStates.get(
+    TestPlugin.id,
+  )!.instanceApi;
   expect(client.isBackgroundPlugin(TestPlugin.id)).toBeTruthy();
   expect(pluginInstance.destroyStub).toHaveBeenCalledTimes(0);
   expect(pluginInstance.connectStub).toHaveBeenCalledTimes(1);
@@ -234,8 +219,9 @@ test('it can send messages from sandy clients', async () => {
       }
     },
   });
-  const pluginInstance: PluginApi = client.sandyPluginStates.get(TestPlugin.id)!
-    .instanceApi;
+  const pluginInstance: PluginApi = client.sandyPluginStates.get(
+    TestPlugin.id,
+  )!.instanceApi;
   // without rendering, non-bg plugins won't connect automatically,
   client.initPlugin(TestPlugin.id);
   await pluginInstance.send('test', {test: 3});

@@ -5,7 +5,7 @@
   "private": true,
   "version": "0.0.0",
   "main": "dist/bundle.js",
-  "flipperBundlerEntry": "src/index.tsx",
+  "flipperBundlerEntry": "src/index_custom.tsx",
   "license": "MIT",
   "keywords": [
     "flipper-plugin"
@@ -14,7 +14,7 @@
   "title": "Sea Mammals",
   "category": "Example Plugin",
   "bugs": {
-    "email": "realpassy@fb.com"
+    "url": "https://github.com/facebook/flipper/issues"
   },
   "scripts": {
     "lint": "flipper-pkg lint",

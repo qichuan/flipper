@@ -8,24 +8,29 @@
  */
 
 import {BaseDevice} from 'flipper';
-import {Crash, shouldShowiOSCrashNotification} from '../index';
-import {parseCrashLog, parsePath} from '../index';
+import {Crash, CrashLog} from '../index';
 import {TestUtils} from 'flipper-plugin';
 import {getPluginKey} from 'flipper';
 import * as CrashReporterPlugin from '../index';
+import {
+  parseIosCrash,
+  parsePath,
+  shouldShowiOSCrashNotification,
+} from '../ios-crash-utils';
+import {parseAndroidCrash} from '../android-crash-utils';
 
 function getCrash(
   id: number,
   callstack: string,
   name: string,
   reason: string,
-): Crash {
+): Crash & CrashLog {
   return {
     notificationID: id.toString(),
     callstack: callstack,
     reason: reason,
     name: name,
-    date: new Date(),
+    date: new Date().getTime(),
   };
 }
 
@@ -35,32 +40,31 @@ function assertCrash(crash: Crash, expectedCrash: Crash) {
   expect(callstack).toEqual(expectedCrash.callstack);
   expect(reason).toEqual(expectedCrash.reason);
   expect(name).toEqual(expectedCrash.name);
-  expect(date.toDateString()).toEqual(expectedCrash.date.toDateString());
+  expect(Math.abs(date - expectedCrash.date)).toBeLessThan(1000);
 }
 
 test('test the parsing of the date and crash info for the log which matches the predefined regex', () => {
   const log =
     'Blaa Blaaa \n Blaa Blaaa \n Exception Type:  SIGSEGV \n Blaa Blaa \n Blaa Blaa Date/Time: 2019-03-21 12:07:00.861 +0000 \n Blaa balaaa';
-  const crash = parseCrashLog(log, 'iOS', null);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('SIGSEGV');
   expect(crash.name).toEqual('SIGSEGV');
-  expect(crash.date).toEqual(new Date('2019-03-21 12:07:00.861'));
+  expect(crash.date).toEqual(new Date('2019-03-21 12:07:00.861').getTime());
 });
 
 test('test the parsing of the reason for crash when log matches the crash regex, but there is no mention of date', () => {
   const log =
     'Blaa Blaaa \n Blaa Blaaa \n Exception Type:  SIGSEGV \n Blaa Blaa \n Blaa Blaa';
-  const crash = parseCrashLog(log, 'iOS', undefined);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('SIGSEGV');
   expect(crash.name).toEqual('SIGSEGV');
-  expect(crash.date).toBeUndefined();
 });
 
 test('test the parsing of the crash log when log does not match the predefined regex but is alphanumeric', () => {
   const log = 'Blaa Blaaa \n Blaa Blaaa \n Blaa Blaaa';
-  const crash = parseCrashLog(log, 'iOS', undefined);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('Cannot figure out the cause');
@@ -69,35 +73,33 @@ test('test the parsing of the crash log when log does not match the predefined r
 test('test the parsing of the reason for crash when log does not match the predefined regex contains unicode character', () => {
   const log =
     'Blaa Blaaa \n Blaa Blaaa \n Exception Type:  🍕🐬 \n Blaa Blaa \n Blaa Blaa';
-  const crash = parseCrashLog(log, 'iOS', undefined);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('Cannot figure out the cause');
-  expect(crash.date).toBeUndefined();
 });
 test('test the parsing of the reason for crash when log is empty', () => {
   const log = '';
-  const crash = parseCrashLog(log, 'iOS', undefined);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('Cannot figure out the cause');
-  expect(crash.date).toBeUndefined();
 });
 test('test the parsing of the Android crash log for the proper android crash format', () => {
   const log =
     'FATAL EXCEPTION: main\nProcess: com.facebook.flipper.sample, PID: 27026\njava.lang.IndexOutOfBoundsException: Index: 190, Size: 0\n\tat java.util.ArrayList.get(ArrayList.java:437)\n\tat com.facebook.flipper.sample.RootComponentSpec.hitGetRequest(RootComponentSpec.java:72)\n\tat com.facebook.flipper.sample.RootComponent.hitGetRequest(RootComponent.java:46)\n';
   const date = new Date();
-  const crash = parseCrashLog(log, 'Android', date);
+  const crash = parseAndroidCrash(log, date);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual(
     'java.lang.IndexOutOfBoundsException: Index: 190, Size: 0',
   );
   expect(crash.name).toEqual('FATAL EXCEPTION: main');
-  expect(crash.date).toEqual(date);
+  expect(crash.date).toEqual(date.getTime());
 });
 test('test the parsing of the Android crash log for the unknown crash format and no date', () => {
   const log = 'Blaa Blaa Blaa';
-  const crash = parseCrashLog(log, 'Android', undefined);
+  const crash = parseAndroidCrash(log, undefined);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('Cannot figure out the cause');
@@ -105,7 +107,7 @@ test('test the parsing of the Android crash log for the unknown crash format and
 });
 test('test the parsing of the Android crash log for the partial format matching the crash format', () => {
   const log = 'First Line Break \n Blaa Blaa \n Blaa Blaa ';
-  const crash = parseCrashLog(log, 'Android', null);
+  const crash = parseAndroidCrash(log, undefined);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('First Line Break ');
@@ -113,7 +115,7 @@ test('test the parsing of the Android crash log for the partial format matching 
 test('test the parsing of the Android crash log with os being iOS', () => {
   const log =
     'FATAL EXCEPTION: main\nProcess: com.facebook.flipper.sample, PID: 27026\njava.lang.IndexOutOfBoundsException: Index: 190, Size: 0\n\tat java.util.ArrayList.get(ArrayList.java:437)\n\tat com.facebook.flipper.sample.RootComponentSpec.hitGetRequest(RootComponentSpec.java:72)\n\tat com.facebook.flipper.sample.RootComponent.hitGetRequest(RootComponent.java:46)\n';
-  const crash = parseCrashLog(log, 'iOS', null);
+  const crash = parseIosCrash(log);
   expect(crash.callstack).toEqual(log);
   expect(crash.reason).toEqual('Cannot figure out the cause');
   expect(crash.name).toEqual('Cannot figure out the cause');
@@ -145,7 +147,9 @@ test('test helper setdefaultPersistedState function', () => {
   const crash = getCrash(0, 'callstack', 'crash0', 'crash0');
   const plugin = TestUtils.startDevicePlugin(CrashReporterPlugin);
   plugin.instance.reportCrash(crash);
-  expect(plugin.exportState()).toEqual({crashes: [crash]});
+  expect(plugin.exportState()).toEqual({
+    crashes: [crash],
+  });
 });
 test('test getNewPersistedStateFromCrashLog for non-empty defaultPersistedState and defined pluginState', () => {
   const crash = getCrash(0, 'callstack', 'crash0', 'crash0');
@@ -164,7 +168,7 @@ test('test getNewPersistedStateFromCrashLog for non-empty defaultPersistedState 
   const pluginStateCrash = getCrash(0, 'callstack', 'crash1', 'crash1');
   plugin.instance.reportCrash(pluginStateCrash);
   const content = 'Blaa Blaaa \n Blaa Blaaa';
-  plugin.instance.reportCrash(parseCrashLog(content, 'iOS', null));
+  plugin.instance.reportCrash(parseIosCrash(content));
   const crashes = plugin.instance.crashes.get();
   expect(crashes.length).toEqual(2);
   assertCrash(crashes[0], pluginStateCrash);
@@ -177,16 +181,6 @@ test('test getNewPersistedStateFromCrashLog for non-empty defaultPersistedState 
       'Cannot figure out the cause',
     ),
   );
-});
-
-test('test getNewPersistedStateFromCrashLog when os is undefined', () => {
-  const plugin = TestUtils.startDevicePlugin(CrashReporterPlugin);
-  const content = 'Blaa Blaaa \n Blaa Blaaa';
-  expect(() => {
-    plugin.instance.reportCrash(parseCrashLog(content, undefined as any, null));
-  }).toThrowErrorMatchingInlineSnapshot(`"Unsupported OS"`);
-  const crashes = plugin.instance.crashes.get();
-  expect(crashes.length).toEqual(0);
 });
 
 test('test parsing of path when inputs are correct', () => {
